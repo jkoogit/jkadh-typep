@@ -12,7 +12,11 @@ import {
   Terminal,
   BookOpen,
   Code2,
+  Key,
+  UserCheck,
+  Crown,
 } from 'lucide-react';
+import { UserAccount } from '../types';
 
 export type TabType =
   | 'LIFECYCLE'
@@ -28,6 +32,9 @@ interface HeaderProps {
   setActiveTab: (tab: TabType) => void;
   onOpenLiveRunner: () => void;
   totalTokensRemaining: number;
+  currentUser: UserAccount | null;
+  onOpenAuthModal: () => void;
+  onOpenVaultModal: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -35,6 +42,9 @@ export const Header: React.FC<HeaderProps> = ({
   setActiveTab,
   onOpenLiveRunner,
   totalTokensRemaining,
+  currentUser,
+  onOpenAuthModal,
+  onOpenVaultModal,
 }) => {
   return (
     <header className="sticky top-0 z-40 bg-[#161B22] border-b border-[#30363D] text-[#E6EDF3]">
@@ -67,22 +77,57 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Quick Metrics Badge & Action Button */}
-          <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#0D1117] border border-[#30363D] text-xs">
+          {/* Quick Metrics, Key Vault & Auth Profile Controls */}
+          <div className="flex items-center gap-2.5">
+            {/* AI Pool Metric */}
+            <div className="hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#0D1117] border border-[#30363D] text-xs">
               <span className="text-[#7D8590]">AI Pool:</span>
               <span className="font-mono font-semibold text-emerald-400">
-                {(totalTokensRemaining / 1000000).toFixed(1)}M Tokens
+                {(totalTokensRemaining / 1000000).toFixed(1)}M
               </span>
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             </div>
 
+            {/* API Key Vault Shortcut */}
+            <button
+              onClick={onOpenVaultModal}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[#21262D] hover:bg-purple-600/20 hover:border-purple-500/40 text-purple-300 font-medium text-xs border border-[#30363D] transition cursor-pointer"
+              title="AES-256 개인 및 팀 API Key Vault"
+            >
+              <Key className="w-3.5 h-3.5 text-purple-400" />
+              <span className="hidden sm:inline">Key Vault</span>
+            </button>
+
+            {/* User Profile / Login Button */}
+            <button
+              onClick={onOpenAuthModal}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[#21262D] hover:bg-[#30363D] text-[#E6EDF3] font-medium text-xs border border-[#30363D] transition cursor-pointer"
+            >
+              {currentUser ? (
+                <>
+                  <img
+                    src={currentUser.avatar}
+                    alt={currentUser.name}
+                    className="w-4 h-4 rounded-full border border-blue-400"
+                  />
+                  <span className="font-semibold text-blue-300">{currentUser.name.split(' ')[0]}</span>
+                  {currentUser.isSuperAdmin && <Crown className="w-3 h-3 text-amber-400" />}
+                </>
+              ) : (
+                <>
+                  <UserCheck className="w-3.5 h-3.5 text-blue-400" />
+                  <span>로그인</span>
+                </>
+              )}
+            </button>
+
+            {/* Vibe Pipeline Runner Button */}
             <button
               onClick={onOpenLiveRunner}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-sm transition border border-blue-500/40 cursor-pointer active:scale-95"
             >
               <PlayCircle className="w-3.5 h-3.5" />
-              <span>실시간 Vibe 파이프라인 실행</span>
+              <span className="hidden sm:inline">실시간 Vibe 파이프라인</span>
             </button>
           </div>
         </div>

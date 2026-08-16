@@ -1,26 +1,27 @@
-# jkadh 아키텍처 및 Vibe Coding 거버넌스 문서 센터
+# jkadh AI DevPlatform - Architecture & Standards Documentation
 
-본 디렉토리(`/docs`)는 **PDFowers** 프로젝트와 **jkadh (Jin-Kyu Architecture & Development Harness)** 프레임워크의 엔터프라이즈 아키텍처 표준, 7단계 엔드투엔드 라이프사이클, 작업그래프(DAG), 하네스 진화 비교, 다중 AI 모델 거버넌스 및 단일 개발 데이터베이스(`jkadhp_dev`) 운영 가이드라인을 현행화하여 관리하는 공식 문서 저장소입니다.
-
----
-
-## 📚 문서 목차 (Documentation Index)
-
-| 번호 | 문서 파일 | 주제 및 핵심 내용 | 최종 현행화일 |
-|---|---|---|---|
-| **01** | [`01-architecture-overview.md`](./01-architecture-overview.md) | **jkadh 아키텍처 개요 및 프로젝트 비전**<br/>- AI Vibe Coding 한계 극복 및 엔터프라이즈 무결성<br/>- PDFowers 타깃 도메인 및 4대 아키텍처 원칙 | 2026-08-15 |
-| **02** | [`02-7phase-lifecycle.md`](./02-7phase-lifecycle.md) | **7단계 엔드투엔드 딜리버리 라이프사이클**<br/>- Phase 1 (검토)부터 Phase 7 (문서화 및 그래프 현행화)까지의 전 공정<br/>- 단계별 Gatekeeper 자동 검증 규칙 및 전담 AI 모델 배정 | 2026-08-15 |
-| **03** | [`03-refactoring-standards.md`](./03-refactoring-standards.md) | **리팩토링 표준 가이드라인 & 코드 품질 기준**<br/>- 4대 핵심 리팩토링 원칙(기능 불변, DRY, 엄격한 타입, 도메인 명명)<br/>- 코드 스멜 카탈로그, AST 복잡도 개선 및 AI 프롬프트 지침 | 2026-08-15 |
-| **04** | [`04-ai-model-governance.md`](./04-ai-model-governance.md) | **AI 모델 메타정보 매트릭스 & 핫스왑 Fallback 라우팅**<br/>- Claude 3.7, Codex, Gemini 3.7, Manus 특화 공정<br/>- 429 Quota/타임아웃 감지 시 3-Tier Circuit Breaker 라우팅 | 2026-08-15 |
-| **05** | [`05-team-rbac-quota.md`](./05-team-rbac-quota.md) | **팀 공용 AI 계정 풀링 & RBAC 권한/토큰 한도 제어 정책**<br/>- ADMIN, ARCHITECT, ENGINEER, REVIEWER, AUDITOR 권한<br/>- 팀원별 일일/월간 토큰 예산 캡 및 모델 화이트리스트 | 2026-08-15 |
-| **06** | [`06-database-architecture.md`](./06-database-architecture.md) | **`jkadhp_dev` PostgreSQL 단일 개발 데이터베이스 아키텍처**<br/>- stg/prd 없는 단일 DB 환경 트랜잭션/세이브포인트 격리<br/>- DDL 스키마, Task 상태 저장 및 마이그레이션 관리 | 2026-08-15 |
-| **07** | [`07-operational-runbook.md`](./07-operational-runbook.md) | **운영 런북 & 장애 시나리오 복구 가이드 (Runbook)**<br/>- 429 Quota 고갈, 503 Provider 다운 대응 절차<br/>- Spec Drift 감지 및 회귀(Regression) 발생 시 롤백 프로세스 | 2026-08-15 |
-| **08** | [`08-task-graph-management.md`](./08-task-graph-management.md) | **작업그래프(Task Graph DAG) 관리 및 프로젝트 진행 체계**<br/>- 작업 착수 검토부터 WBS 분할, 상태 머신 전이<br/>- PDF-OCR-04 등 실전 프로젝트 이력 및 Phase 7 DB 실시간 동기화 | 2026-08-15 |
-| **09** | [`09-harness-architecture-comparison.md`](./09-harness-architecture-comparison.md) | **개발 하네스 점검 및 기존 jkadh 대비 비교 분석**<br/>- 세션시작, 태스크시작/처리/정리/승급, 세션종료, 루프 7대 영역 분석<br/>- 기존 Classic jkadh 대비 유지, 개선, 신규 현행화 내역 심층 매트릭스 | 2026-08-15 |
+본 저장소의 `/docs` 디렉토리는 jkadh 엔터프라이즈 AI 소프트웨어 개발 플랫폼의 공식 표준 문서 집합입니다.
 
 ---
 
-## 🛠️ 활용 가이드
-* **개발자 / 에이전트**: 새 기능 구현 전 `02-7phase-lifecycle.md`, `08-task-graph-management.md`, `09-harness-architecture-comparison.md`를 필독하여 Gatekeeper 규칙과 하네스 절차를 준수합니다.
-* **아키텍트 / 리드**: 모델 추가 및 RBAC 조정 시 `04-ai-model-governance.md`와 `05-team-rbac-quota.md`를 업데이트합니다.
-* **DBA / 운영자**: 마이그레이션 및 장애 대응 시 `06-database-architecture.md`와 `07-operational-runbook.md`를 참조합니다.
+## 📚 표준 문서 목록 (Standard Documents)
+
+| 번호 | 문서 파일명 | 문서 제목 | 핵심 내용 | 개정 버전 |
+|---|---|---|---|---|
+| **01** | `01-architecture-overview.md` | 아키텍처 총괄 개요 | 3계층 아키텍처, 실시간 오케스트레이션, 무중단 서킷 브레이커 | v1.1.0 |
+| **02** | `02-7phase-lifecycle.md` | 7단계 딜리버리 라이프사이클 | Phase 1~7 공정 정의 및 Gatekeeper 0% 스펙 드리프트 검증 규칙 | v1.1.0 |
+| **03** | `03-refactoring-standards.md` | 리팩토링 및 클린 코드 표준 | 단일 책임 원칙, AST 정적 검증, 안티패턴 방지 | v1.1.0 |
+| **04** | `04-ai-model-governance.md` | 멀티 모델 거버넌스 및 장애 복구 | Claude/Codex/Gemini 역할 배정, 429 핫스왑 Fallback 체인 | v1.1.0 |
+| **05** | `05-team-rbac-quota.md` | 팀 권한(RBAC) 및 쿼터 관리 | 역할별 일일 토큰 캡, 승인 프로세스, 예산 통제 | v1.1.0 |
+| **06** | `06-database-architecture.md` | `jkadhp_dev` DB 아키텍처 | PostgreSQL 스키마, 6대 공통 감사 컬럼, Savepoint 트랜잭션 | v1.1.0 |
+| **07** | `07-operational-runbook.md` | 운영 런북 및 장애 대응 | 429 Rate Limit 탈출, 스펙 드리프트 자가치유, 장애 복구 | v1.1.0 |
+| **08** | `08-task-graph-management.md` | 2계층 듀얼 작업그래프 관리 | 상단 미진행 백로그 + 하단 상향 누적 DAG 타임라인 관리 | v1.1.0 |
+| **09** | `09-harness-architecture-comparison.md`| 하네스 7대 영역 & 루프 상태머신 | 세션/태스크 시작-처리-정리-승급-종료 및 7종 루프 제어 | v1.2.0 |
+| **10** | `10-auth-security-vault.md` | 회원 RBAC 및 AES-256 Vault | SUPER_ADMIN 승격, API Key 암호화 볼트, 루프 트랜잭션 DDL | v1.0.0 |
+
+---
+
+## 🔒 문서 거버넌스 원칙 (Documentation Governance)
+1. **이중 동기화 원칙 (Dual-Sync Guard)**: 로컬 Markdown 문서 수정 시 PostgreSQL DB `task_nodes` 및 `agent_session_logs`에 100% 동시 반영.
+2. **개정 이력 의무화**: 모든 문서는 최하단에 [개정 이력 (Revision History)] 표를 필수로 유지.
+3. **스펙 무결성**: Phase 7 Gatekeeper 통과 시 문서와 소스코드 간의 스펙 일치율 100점 만점 검증.
