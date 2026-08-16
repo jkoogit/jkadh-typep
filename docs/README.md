@@ -18,6 +18,7 @@
 | **08** | `08-task-graph-management.md` | 2계층 듀얼 작업그래프 관리 | 상단 미진행 백로그 + 하단 상향 누적 DAG 타임라인 관리 | v1.1.0 |
 | **09** | `09-harness-architecture-comparison.md`| 하네스 7대 영역 & 루프 상태머신 | 세션/태스크 시작-처리-정리-승급-종료 및 7종 루프 제어 | v1.2.0 |
 | **10** | `10-auth-security-vault.md` | 회원 RBAC 및 AES-256 Vault | SUPER_ADMIN 승격, API Key 암호화 볼트, 루프 트랜잭션 DDL | v1.0.0 |
+| **11** | `11-session-report-standard.md` | 세션 회고 보고서 작성 규격 | 보고서 명명 규칙, DAG 단위 작업, 메타 헤더 및 표준 템플릿 | v1.0.0 |
 
 ---
 
