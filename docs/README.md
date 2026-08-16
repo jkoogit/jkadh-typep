@@ -21,6 +21,14 @@
 
 ---
 
+## 📑 정례 회고 및 결산 리포트 (`/docs/report`)
+
+| 일자/순번 | 리포트 파일명 | 세션 ID | 작업 내용 및 주요 결산 |
+|---|---|---|---|
+| **01 (08-16)** | `01-2026-08-16-세션종료-회고-보고서.md` | `SES-20260816-AUTH-VAULT-02` | RBAC, AES-256 Vault, 7종 루프 상태머신 완료 및 [PDF-OCR-04] 인계 브리프 |
+
+---
+
 ## 🔒 문서 거버넌스 원칙 (Documentation Governance)
 1. **이중 동기화 원칙 (Dual-Sync Guard)**: 로컬 Markdown 문서 수정 시 PostgreSQL DB `task_nodes` 및 `agent_session_logs`에 100% 동시 반영.
 2. **개정 이력 의무화**: 모든 문서는 최하단에 [개정 이력 (Revision History)] 표를 필수로 유지.
