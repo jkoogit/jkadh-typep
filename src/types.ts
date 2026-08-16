@@ -1,4 +1,67 @@
-export type MemberRole = 'ADMIN' | 'ARCHITECT' | 'ENGINEER' | 'REVIEWER' | 'AUDITOR';
+export type MemberRole = 'SUPER_ADMIN' | 'ADMIN' | 'ARCHITECT' | 'ENGINEER' | 'REVIEWER' | 'AUDITOR';
+
+export interface AuditMetadata {
+  reg_sys_cd: string;
+  reg_user_id: string;
+  reg_dt: string;
+  mod_sys_cd: string;
+  mod_user_id: string;
+  mod_dt: string;
+}
+
+export interface UserAccount extends AuditMetadata {
+  id: string;
+  name: string;
+  email: string;
+  role: MemberRole;
+  department: string;
+  dailyTokenLimit: number;
+  tokensUsedToday: number;
+  monthlyBudgetUSD: number;
+  costUsedUSD: number;
+  status: 'ACTIVE' | 'SUSPENDED' | 'RATE_LIMITED';
+  isSuperAdmin: boolean;
+  avatar: string;
+  allowedModels: string[];
+}
+
+export interface UserApiVaultItem extends AuditMetadata {
+  id: string;
+  userId: string;
+  provider: 'OPENAI' | 'ANTHROPIC' | 'GOOGLE' | 'MANUS' | 'CUSTOM';
+  keyAlias: string;
+  maskedKey: string;
+  encryptedValue?: string;
+  isTeamShared: boolean;
+  dailyQuotaLimit: number;
+  usedTokens: number;
+  status: 'ACTIVE' | 'EXHAUSTED' | 'REVOKED';
+}
+
+export type LoopActionType =
+  | 'LOOP_ANALYZE'
+  | 'LOOP_EXECUTE'
+  | 'LOOP_REFINE'
+  | 'LOOP_ABORT'
+  | 'LOOP_APPROVE'
+  | 'LOOP_DISCARD'
+  | 'LOOP_RESTORE'
+  | 'LOOP_ROLLBACK';
+
+export interface TaskExecutionLoop extends AuditMetadata {
+  id: string;
+  taskId: string;
+  phaseNumber: number;
+  loopNumber: number;
+  loopAction: LoopActionType;
+  modelId: string;
+  savepointId?: string;
+  astValidationPassed: boolean;
+  errorSummary?: string;
+  tokensConsumed: number;
+  latencyMs: number;
+  diffSummary?: string;
+}
 
 export interface TeamMember {
   id: string;
@@ -14,6 +77,7 @@ export interface TeamMember {
   status: 'ACTIVE' | 'SUSPENDED' | 'RATE_LIMITED';
   department: string;
   lastActive: string;
+  isSuperAdmin?: boolean;
 }
 
 export interface AIAccount {
@@ -95,6 +159,7 @@ export interface LifecyclePhase {
     modelUsed: string;
     tokensConsumed: number;
   }[];
+  loops?: TaskExecutionLoop[];
   lastExecutedAt?: string;
 }
 

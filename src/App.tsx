@@ -8,6 +8,8 @@ import { ModelMetaRegistryView } from './components/ModelMetaRegistryView';
 import { TeamAccountManagerView } from './components/TeamAccountManagerView';
 import { DevDatabaseExplorerView } from './components/DevDatabaseExplorerView';
 import { LiveVibeRunnerModal } from './components/LiveVibeRunnerModal';
+import { AuthModal } from './components/AuthModal';
+import { ApiKeyVaultModal } from './components/ApiKeyVaultModal';
 import { api } from './services/api';
 import {
   AIAccount,
@@ -19,6 +21,8 @@ import {
   ModelMeta,
   TaskGraphNode,
   TeamMember,
+  UserAccount,
+  UserApiVaultItem,
 } from './types';
 import {
   INITIAL_AI_ACCOUNTS,
@@ -31,6 +35,63 @@ import {
   INITIAL_MEMBERS,
 } from './data/initialData';
 
+const INITIAL_USER: UserAccount = {
+  id: 'usr_jkoogi_01',
+  email: 'jkoogit@gmail.com',
+  name: '구진규 (Jinkyu Koo)',
+  avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+  role: 'SUPER_ADMIN',
+  isSuperAdmin: true,
+  department: 'JKADH Platform Engineering',
+  dailyTokenLimit: 5000000,
+  tokensUsedToday: 412000,
+  monthlyBudgetUSD: 500,
+  status: 'ACTIVE',
+  reg_sys_cd: 'JKADH_CORE',
+  reg_user_id: 'SYSTEM',
+  reg_dt: '2026-08-16 00:00:00',
+  mod_sys_cd: 'JKADH_CORE',
+  mod_user_id: 'SYSTEM',
+  mod_dt: '2026-08-16 00:00:00',
+};
+
+const INITIAL_VAULT_ITEMS: UserApiVaultItem[] = [
+  {
+    id: 'vault_ant_01',
+    userId: 'usr_jkoogi_01',
+    provider: 'ANTHROPIC',
+    keyAlias: 'Claude 3.7 Sonnet Master Key',
+    maskedKey: 'sk-ant-api03-...89aF',
+    isTeamShared: true,
+    dailyQuotaLimit: 3000000,
+    usedTokens: 184500,
+    status: 'ACTIVE',
+    reg_sys_cd: 'JKADH_VAULT',
+    reg_user_id: 'jkoogi',
+    reg_dt: '2026-08-16 01:00:00',
+    mod_sys_cd: 'JKADH_VAULT',
+    mod_user_id: 'jkoogi',
+    mod_dt: '2026-08-16 01:00:00',
+  },
+  {
+    id: 'vault_oai_02',
+    userId: 'usr_jkoogi_01',
+    provider: 'OPENAI',
+    keyAlias: 'OpenAI GPT-4o Dedicated Key',
+    maskedKey: 'sk-proj-...X92p',
+    isTeamShared: false,
+    dailyQuotaLimit: 1000000,
+    usedTokens: 42000,
+    status: 'ACTIVE',
+    reg_sys_cd: 'JKADH_VAULT',
+    reg_user_id: 'jkoogi',
+    reg_dt: '2026-08-16 01:05:00',
+    mod_sys_cd: 'JKADH_VAULT',
+    mod_user_id: 'jkoogi',
+    mod_dt: '2026-08-16 01:05:00',
+  },
+];
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('PROPOSALS');
   const [accounts, setAccounts] = useState<AIAccount[]>(INITIAL_AI_ACCOUNTS);
@@ -42,6 +103,13 @@ export default function App() {
   const [dbTables, setDbTables] = useState<DatabaseTableMeta[]>(INITIAL_DB_TABLES);
   const [chartMetrics, setChartMetrics] = useState<ExecutionMetric[]>(INITIAL_METRICS_CHART_DATA);
   const [selectedTaskId, setSelectedTaskId] = useState<string>(INITIAL_TASK_GRAPH[1]?.id || 'node-ocr-engine');
+  
+  // Auth & Vault State
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(INITIAL_USER);
+  const [vaultItems, setVaultItems] = useState<UserApiVaultItem[]>(INITIAL_VAULT_ITEMS);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [isVaultModalOpen, setIsVaultModalOpen] = useState<boolean>(false);
+  
   const [isLiveRunnerOpen, setIsLiveRunnerOpen] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
@@ -101,6 +169,86 @@ export default function App() {
   const handleRunAIVibe = (taskId: string, phaseNum: number) => {
     setSelectedTaskId(taskId);
     setIsLiveRunnerOpen(true);
+  };
+
+  // Auth Handlers
+  const handleLogin = (emailOrId: string) => {
+    const isSuper = emailOrId.includes('jkoogi') || emailOrId.includes('jkoogit@gmail.com');
+    const newUser: UserAccount = {
+      id: `usr_${Date.now()}`,
+      email: emailOrId.includes('@') ? emailOrId : `${emailOrId}@jkadh.io`,
+      name: isSuper ? '구진규 (Jinkyu Koo)' : emailOrId,
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+      role: isSuper ? 'SUPER_ADMIN' : 'ENGINEER',
+      isSuperAdmin: isSuper,
+      department: 'JKADH Platform Engineering',
+      dailyTokenLimit: isSuper ? 5000000 : 1000000,
+      tokensUsedToday: 0,
+      monthlyBudgetUSD: isSuper ? 500 : 100,
+      status: 'ACTIVE',
+      reg_sys_cd: 'JKADH_AUTH',
+      reg_user_id: emailOrId,
+      reg_dt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      mod_sys_cd: 'JKADH_AUTH',
+      mod_user_id: emailOrId,
+      mod_dt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+    };
+    setCurrentUser(newUser);
+  };
+
+  const handleRegister = (data: { name: string; email: string; department: string; requestedRole: MemberRole }) => {
+    const isSuper = data.email.includes('jkoogi') || data.email.includes('jkoogit@gmail.com');
+    const newUser: UserAccount = {
+      id: `usr_${Date.now()}`,
+      email: data.email,
+      name: data.name,
+      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80',
+      role: isSuper ? 'SUPER_ADMIN' : data.requestedRole,
+      isSuperAdmin: isSuper,
+      department: data.department || 'JKADH Engineering',
+      dailyTokenLimit: isSuper ? 5000000 : 1000000,
+      tokensUsedToday: 0,
+      monthlyBudgetUSD: 150,
+      status: 'ACTIVE',
+      reg_sys_cd: 'JKADH_AUTH',
+      reg_user_id: data.email,
+      reg_dt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      mod_sys_cd: 'JKADH_AUTH',
+      mod_user_id: data.email,
+      mod_dt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+    };
+    setCurrentUser(newUser);
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+  };
+
+  // Vault Handlers
+  const handleAddVaultKey = (item: Omit<UserApiVaultItem, 'id' | 'reg_sys_cd' | 'reg_user_id' | 'reg_dt' | 'mod_sys_cd' | 'mod_user_id' | 'mod_dt'> & { rawKey: string }) => {
+    const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const newVaultItem: UserApiVaultItem = {
+      id: `vault_${Date.now()}`,
+      userId: item.userId,
+      provider: item.provider,
+      keyAlias: item.keyAlias,
+      maskedKey: item.maskedKey,
+      isTeamShared: item.isTeamShared,
+      dailyQuotaLimit: item.dailyQuotaLimit,
+      usedTokens: 0,
+      status: 'ACTIVE',
+      reg_sys_cd: 'JKADH_VAULT',
+      reg_user_id: currentUser?.id || 'SYSTEM',
+      reg_dt: now,
+      mod_sys_cd: 'JKADH_VAULT',
+      mod_user_id: currentUser?.id || 'SYSTEM',
+      mod_dt: now,
+    };
+    setVaultItems((prev) => [newVaultItem, ...prev]);
+  };
+
+  const handleDeleteVaultKey = (id: string) => {
+    setVaultItems((prev) => prev.filter((k) => k.id !== id));
   };
 
   // Handler: Reset account tokens
@@ -183,6 +331,9 @@ export default function App() {
         setActiveTab={setActiveTab}
         onOpenLiveRunner={() => setIsLiveRunnerOpen(true)}
         totalTokensRemaining={totalTokensRemaining}
+        currentUser={currentUser}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onOpenVaultModal={() => setIsVaultModalOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -258,6 +409,27 @@ export default function App() {
         models={models}
         defaultTaskId={selectedTaskId}
         onExecute={(params) => api.vibeOrchestrate(params)}
+      />
+
+      {/* Auth & RBAC Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        currentUser={currentUser}
+        onLogin={handleLogin}
+        onRegister={handleRegister}
+        onLogout={handleLogout}
+        onOpenVault={() => setIsVaultModalOpen(true)}
+      />
+
+      {/* API Key Vault Modal */}
+      <ApiKeyVaultModal
+        isOpen={isVaultModalOpen}
+        onClose={() => setIsVaultModalOpen(false)}
+        vaultItems={vaultItems}
+        onAddKey={handleAddVaultKey}
+        onDeleteKey={handleDeleteVaultKey}
+        currentUserId={currentUser?.id || 'usr_guest'}
       />
     </div>
   );
