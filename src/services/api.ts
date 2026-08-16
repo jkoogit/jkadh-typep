@@ -1,0 +1,138 @@
+import {
+  AIAccount,
+  ArchitecturalProposalCase,
+  DatabaseTableMeta,
+  DocumentationSection,
+  ExecutionMetric,
+  ModelMeta,
+  TaskGraphNode,
+  TeamMember,
+} from '../types';
+
+export const api = {
+  async getHealth() {
+    const res = await fetch('/api/health');
+    return res.json();
+  },
+
+  async getDocumentation(): Promise<{ success: boolean; data: DocumentationSection[] }> {
+    const res = await fetch('/api/documentation');
+    return res.json();
+  },
+
+  async getAccounts(): Promise<{ success: boolean; data: AIAccount[] }> {
+    const res = await fetch('/api/accounts');
+    return res.json();
+  },
+
+  async updateAccountQuota(id: string, payload: Partial<AIAccount>) {
+    const res = await fetch(`/api/accounts/${id}/update-quota`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return res.json();
+  },
+
+  async resetAccountTokens(id: string) {
+    const res = await fetch(`/api/accounts/${id}/reset-tokens`, {
+      method: 'POST',
+    });
+    return res.json();
+  },
+
+  async getMembers(): Promise<{ success: boolean; data: TeamMember[] }> {
+    const res = await fetch('/api/members');
+    return res.json();
+  },
+
+  async updateMemberPermissions(id: string, payload: Partial<TeamMember>) {
+    const res = await fetch(`/api/members/${id}/permissions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return res.json();
+  },
+
+  async getModels(): Promise<{ success: boolean; data: ModelMeta[] }> {
+    const res = await fetch('/api/models');
+    return res.json();
+  },
+
+  async updateModelFallback(id: string, payload: { fallbackOrder?: string[]; isAvailable?: boolean }) {
+    const res = await fetch(`/api/models/${id}/fallback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return res.json();
+  },
+
+  async getTasks(): Promise<{ success: boolean; data: TaskGraphNode[] }> {
+    const res = await fetch('/api/tasks');
+    return res.json();
+  },
+
+  async getTask(id: string): Promise<{ success: boolean; data: TaskGraphNode }> {
+    const res = await fetch(`/api/tasks/${id}`);
+    return res.json();
+  },
+
+  async verifyAndAdvancePhase(taskId: string, phaseNumber: number): Promise<{ success: boolean; data: TaskGraphNode }> {
+    const res = await fetch(`/api/tasks/${taskId}/phase/${phaseNumber}/verify-and-advance`, {
+      method: 'POST',
+    });
+    return res.json();
+  },
+
+  async vibeOrchestrate(params: {
+    taskId?: string;
+    phaseNumber: number;
+    prompt?: string;
+    forceFallback?: boolean;
+    simulateModel?: string;
+  }) {
+    const res = await fetch('/api/gemini/vibe-orchestrate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    return res.json();
+  },
+
+  async getProposals(): Promise<{ success: boolean; data: ArchitecturalProposalCase[] }> {
+    const res = await fetch('/api/proposals');
+    return res.json();
+  },
+
+  async getDbTables(): Promise<{ success: boolean; data: DatabaseTableMeta[]; database: string }> {
+    const res = await fetch('/api/db/tables');
+    return res.json();
+  },
+
+  async runDbQuery(query: string) {
+    const res = await fetch('/api/db/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    });
+    return res.json();
+  },
+
+  async getMetrics(): Promise<{
+    success: boolean;
+    chartData: ExecutionMetric[];
+    summary: {
+      totalTokensConsumed: number;
+      totalRemainingTokens: number;
+      monthlyBudgetUSD: number;
+      currentCostUSD: number;
+      activeMembersCount: number;
+      avgSpecValidationScore: number;
+    };
+  }> {
+    const res = await fetch('/api/metrics');
+    return res.json();
+  },
+};
