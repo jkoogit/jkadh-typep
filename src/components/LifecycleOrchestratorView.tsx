@@ -15,8 +15,16 @@ import {
   ArrowRight,
   ExternalLink,
   Code2,
+  RotateCcw,
+  Square,
+  Flame,
+  GitBranch,
+  Database,
+  History,
+  CornerDownRight,
+  Lock,
 } from 'lucide-react';
-import { LifecyclePhase, TaskGraphNode } from '../types';
+import { LifecyclePhase, LoopActionType, TaskExecutionLoop, TaskGraphNode } from '../types';
 import { TaskGraphViewer } from './TaskGraphViewer';
 
 interface LifecycleOrchestratorViewProps {
@@ -37,9 +45,42 @@ export const LifecycleOrchestratorView: React.FC<LifecycleOrchestratorViewProps>
   isProcessing,
 }) => {
   const [activePhaseNum, setActivePhaseNum] = useState<number>(selectedTask.currentPhase || 3);
+  const [activeLoopAction, setActiveLoopAction] = useState<LoopActionType | null>(null);
+  const [loopFeedback, setLoopFeedback] = useState<string>('');
 
   const activePhase: LifecyclePhase =
     selectedTask.phases.find((p) => p.phaseNumber === activePhaseNum) || selectedTask.phases[0];
+
+  // Simulated active loops list
+  const loops: TaskExecutionLoop[] = activePhase.loops || [
+    {
+      id: `loop-${selectedTask.id}-01`,
+      taskId: selectedTask.id,
+      phaseNumber: activePhase.phaseNumber,
+      loopNumber: 1,
+      loopAction: 'LOOP_EXECUTE',
+      modelId: activePhase.assignedModelId,
+      savepointId: `sp_${selectedTask.code.toLowerCase()}_lp1`,
+      astValidationPassed: true,
+      tokensConsumed: 18450,
+      latencyMs: 1240,
+      diffSummary: 'PdfOcrEngine.ts AST 파싱 및 인터페이스 바인딩 완료',
+      reg_sys_cd: 'JKADH_ENGINE',
+      reg_user_id: 'jkoogi',
+      reg_dt: '2026-08-16 01:25:00',
+      mod_sys_cd: 'JKADH_ENGINE',
+      mod_user_id: 'jkoogi',
+      mod_dt: '2026-08-16 01:25:00',
+    },
+  ];
+
+  const handleExecuteLoopAction = (action: LoopActionType) => {
+    setActiveLoopAction(action);
+    setLoopFeedback(`하네스 ${action} 집행 완료: DB Savepoint 및 AST 무결성 상태가 영속화되었습니다.`);
+    setTimeout(() => {
+      setActiveLoopAction(null);
+    }, 2500);
+  };
 
   return (
     <div className="space-y-4">
@@ -156,6 +197,93 @@ export const LifecycleOrchestratorView: React.FC<LifecycleOrchestratorViewProps>
             </div>
           </div>
 
+          {/* 7-Loop Action State Machine Control Bar */}
+          <div className="bg-[#161B22] border border-blue-500/30 rounded-lg p-3 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-blue-300 flex items-center gap-1.5">
+                <Flame className="w-3.5 h-3.5 text-amber-400" />
+                하네스 7종 루프 상태머신 제어 콘솔 (Harness Loop State Machine)
+              </span>
+              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                Savepoint: sp_{selectedTask.code.toLowerCase()}_active
+              </span>
+            </div>
+
+            {/* Loop Action Buttons */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5">
+              <button
+                onClick={() => handleExecuteLoopAction('LOOP_ANALYZE')}
+                className="p-1.5 rounded bg-[#0D1117] hover:bg-blue-600/20 text-blue-300 border border-[#30363D] hover:border-blue-500/40 text-[10px] font-semibold flex flex-col items-center gap-1 cursor-pointer"
+              >
+                <Sparkles className="w-3 h-3 text-blue-400" />
+                <span>루프분석</span>
+              </button>
+
+              <button
+                onClick={() => handleExecuteLoopAction('LOOP_EXECUTE')}
+                className="p-1.5 rounded bg-[#0D1117] hover:bg-emerald-600/20 text-emerald-300 border border-[#30363D] hover:border-emerald-500/40 text-[10px] font-semibold flex flex-col items-center gap-1 cursor-pointer"
+              >
+                <Play className="w-3 h-3 text-emerald-400" />
+                <span>루프실행</span>
+              </button>
+
+              <button
+                onClick={() => handleExecuteLoopAction('LOOP_REFINE')}
+                className="p-1.5 rounded bg-[#0D1117] hover:bg-amber-600/20 text-amber-300 border border-[#30363D] hover:border-amber-500/40 text-[10px] font-semibold flex flex-col items-center gap-1 cursor-pointer"
+              >
+                <RefreshCw className="w-3 h-3 text-amber-400" />
+                <span>루프보완</span>
+              </button>
+
+              <button
+                onClick={() => handleExecuteLoopAction('LOOP_ABORT')}
+                className="p-1.5 rounded bg-[#0D1117] hover:bg-rose-600/20 text-rose-300 border border-[#30363D] hover:border-rose-500/40 text-[10px] font-semibold flex flex-col items-center gap-1 cursor-pointer"
+              >
+                <Square className="w-3 h-3 text-rose-400" />
+                <span>루프중단</span>
+              </button>
+
+              <button
+                onClick={() => handleExecuteLoopAction('LOOP_APPROVE')}
+                className="p-1.5 rounded bg-[#0D1117] hover:bg-emerald-600/20 text-emerald-300 border border-[#30363D] hover:border-emerald-500/40 text-[10px] font-semibold flex flex-col items-center gap-1 cursor-pointer"
+              >
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                <span>루프승인</span>
+              </button>
+
+              <button
+                onClick={() => handleExecuteLoopAction('LOOP_DISCARD')}
+                className="p-1.5 rounded bg-[#0D1117] hover:bg-slate-600/20 text-slate-300 border border-[#30363D] hover:border-slate-500/40 text-[10px] font-semibold flex flex-col items-center gap-1 cursor-pointer"
+              >
+                <History className="w-3 h-3 text-slate-400" />
+                <span>루프삭제</span>
+              </button>
+
+              <button
+                onClick={() => handleExecuteLoopAction('LOOP_RESTORE')}
+                className="p-1.5 rounded bg-[#0D1117] hover:bg-cyan-600/20 text-cyan-300 border border-[#30363D] hover:border-cyan-500/40 text-[10px] font-semibold flex flex-col items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3 h-3 text-cyan-400" />
+                <span>루프복원</span>
+              </button>
+
+              <button
+                onClick={() => handleExecuteLoopAction('LOOP_ROLLBACK')}
+                className="p-1.5 rounded bg-[#0D1117] hover:bg-red-600/20 text-red-300 border border-red-500/30 text-[10px] font-semibold flex flex-col items-center gap-1 cursor-pointer"
+              >
+                <CornerDownRight className="w-3 h-3 text-red-400" />
+                <span>루프롤백</span>
+              </button>
+            </div>
+
+            {loopFeedback && (
+              <div className="p-2 rounded bg-blue-950/40 border border-blue-800/40 text-[11px] text-blue-200 flex items-center gap-2 animate-in fade-in duration-150">
+                <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span>{loopFeedback}</span>
+              </div>
+            )}
+          </div>
+
           {/* Phase Completion Criteria (Gatekeeper Rules) */}
           <div className="space-y-2">
             <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#7D8590] flex items-center gap-1.5">
@@ -248,114 +376,39 @@ export const LifecycleOrchestratorView: React.FC<LifecycleOrchestratorViewProps>
           {activePhase.phaseNumber === 4 && activePhase.specJsonSchema && (
             <div className="space-y-1.5">
               <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#7D8590] flex items-center gap-1.5">
-                <FileCode className="w-3.5 h-3.5 text-blue-400" />
-                계약 인터페이스 & JSON Schema Draft-07 명세
+                <FileCode className="w-3.5 h-3.5 text-purple-400" />
+                아키텍처 엄격 인터페이스 명세 (JSON Schema Draft-07)
               </h4>
-              <pre className="p-3.5 rounded-lg bg-[#0A0C10] border border-[#30363D] text-xs font-mono text-blue-300 overflow-x-auto">
+              <pre className="p-3 rounded-lg bg-[#0A0C10] border border-[#30363D] text-[11px] font-mono text-emerald-400 overflow-x-auto max-h-60">
                 {activePhase.specJsonSchema}
               </pre>
             </div>
           )}
 
-          {/* Phase 5 Special: Test Suite & Failure Injection */}
-          {activePhase.phaseNumber === 5 && (
-            <div className="space-y-2">
-              <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#7D8590] flex items-center gap-1.5">
-                <FileCode className="w-3.5 h-3.5 text-amber-400" />
-                테스트 스위트 설계 & 가상 장애 주입(Failure Injection) 계획
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs">
-                <div className="p-3 rounded-lg bg-[#161B22] border border-[#30363D] space-y-1.5">
-                  <span className="font-semibold text-[#E6EDF3] flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    14개 테스트 벡터 설계 (100% Coverage Target)
+          {/* Execution Logs */}
+          <div className="space-y-1.5">
+            <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#7D8590]">
+              실행 및 게이트키퍼 감사 로그 ({activePhase.executionLogs.length}건)
+            </h4>
+            <div className="p-2.5 rounded-lg bg-[#0A0C10] border border-[#30363D] font-mono text-[11px] space-y-1 max-h-36 overflow-y-auto">
+              {activePhase.executionLogs.map((log, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span className="text-[#7D8590]">{log.timestamp.split(' ')[1] || log.timestamp}</span>
+                  <span
+                    className={`font-bold ${
+                      log.level === 'SUCCESS'
+                        ? 'text-emerald-400'
+                        : log.level === 'ERROR'
+                        ? 'text-rose-400'
+                        : 'text-blue-400'
+                    }`}
+                  >
+                    [{log.level}]
                   </span>
-                  <ul className="text-[11px] text-[#7D8590] space-y-0.5 font-mono">
-                    <li>• test_pdf_magic_bytes_validation() [Normal]</li>
-                    <li>• test_corrupted_stream_error_recovery() [Error]</li>
-                    <li>• test_circuit_breaker_hot_swap_failover() [Chaos]</li>
-                  </ul>
+                  <span className="text-[#E6EDF3]">{log.message}</span>
+                  <span className="text-[#7D8590] ml-auto">({log.tokensConsumed} tok)</span>
                 </div>
-                <div className="p-3 rounded-lg bg-[#161B22] border border-[#30363D] space-y-1.5">
-                  <span className="font-semibold text-[#E6EDF3] flex items-center gap-1.5">
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                    429 Quota 고갈 / 타임아웃 주입 조건
-                  </span>
-                  <div className="text-[11px] text-blue-300 font-mono bg-[#0A0C10] p-2 rounded border border-[#30363D]">
-                    ASSERT: failover_latency &lt; 300ms &amp;&amp; payload_retained == true
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Phase 6 Special: Generated Code with Fallback Engine */}
-          {activePhase.phaseNumber === 6 && activePhase.generatedOutput && (
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#7D8590] flex items-center gap-1.5">
-                  <Code2 className="w-3.5 h-3.5 text-emerald-400" />
-                  생성된 1차 실행 코드 (PdfOcrEngine.ts) - 컴파일 및 다단계 Fallback 방어 탑재
-                </h4>
-                <span className="text-[10px] text-emerald-400 font-mono font-semibold">
-                  TSC Compile: 0 Errors
-                </span>
-              </div>
-              <pre className="p-3.5 rounded-lg bg-[#0A0C10] border border-[#30363D] text-xs font-mono text-[#E6EDF3] overflow-x-auto max-h-72">
-                {activePhase.generatedOutput}
-              </pre>
-            </div>
-          )}
-
-          {/* Phase 7 Special: Work Review & Backlog Synchronization */}
-          {activePhase.phaseNumber === 7 && (
-            <div className="space-y-2">
-              <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#7D8590] flex items-center gap-1.5">
-                <FileCode className="w-3.5 h-3.5 text-purple-400" />
-                Phase 7 작업 리뷰 요약 &amp; 미처리 작업(Backlog) 식별
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-                <div className="p-3 rounded-lg bg-[#161B22] border border-[#30363D] space-y-1">
-                  <span className="text-[10px] text-[#7D8590] block">작업 결과 보고서</span>
-                  <p className="text-xs font-semibold text-[#E6EDF3]">
-                    PDF 스트림 파서 &amp; 하이브리드 OCR 엔진 구현 완료
-                  </p>
-                  <p className="text-[11px] text-[#7D8590]">
-                    설계 대비 구현 드리프트 0%, TypeScript 안전 가드 100% 검증
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-[#161B22] border border-[#30363D] space-y-1">
-                  <span className="text-[10px] text-[#7D8590] block">자동 생성된 후속 백로그</span>
-                  <div className="text-[11px] text-emerald-400 font-mono space-y-0.5">
-                    <div>• [PDF-TABLE-05] 비구조화 표 감지 엔진 (연계 완료)</div>
-                    <div>• [PDF-CRYPTO-02] DRM 워터마크 엔진 (연계 완료)</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Artifacts & Audit Stream */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[#30363D] text-xs">
-            <div className="p-3 rounded-lg bg-[#161B22] border border-[#30363D] space-y-1">
-              <span className="text-[10px] font-bold text-[#7D8590] uppercase">입력 산출물 (Input Artifacts)</span>
-              <div className="flex flex-wrap gap-1 mt-1">
-                {activePhase.inputArtifacts.map((art, i) => (
-                  <span key={i} className="px-1.5 py-0.5 rounded bg-[#0D1117] border border-[#30363D] text-[#8B949E] text-[10px] font-mono">
-                    {art}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="p-3 rounded-lg bg-[#161B22] border border-[#30363D] space-y-1">
-              <span className="text-[10px] font-bold text-[#7D8590] uppercase">출력 산출물 (Output Artifacts)</span>
-              <div className="flex flex-wrap gap-1 mt-1">
-                {activePhase.outputArtifacts.map((art, i) => (
-                  <span key={i} className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[10px] border border-blue-500/30 font-mono">
-                    {art}
-                  </span>
-                ))}
-              </div>
+              ))}
             </div>
           </div>
         </div>
