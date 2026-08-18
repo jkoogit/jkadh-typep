@@ -100,29 +100,54 @@ async function closeIssue(issueNumber) {
   }
 }
 
+async function promoteBranchWithPR(head, base, title, body) {
+  console.log(`[GitHub API] Starting PR Lifecycle: ${head} ➔ ${base}`);
+  const pr = await createPullRequest(title, head, base, body);
+  if (!pr) {
+    throw new Error(`Failed to create PR for ${head} -> ${base}`);
+  }
+  console.log(`[GitHub API] PR #${pr.number} created: ${pr.html_url}`);
+  
+  const mergeResult = await mergePullRequest(pr.number, `Merge pull request #${pr.number} from ${head} into ${base}`);
+  if (!mergeResult) {
+    throw new Error(`Failed to merge PR #${pr.number}`);
+  }
+  console.log(`[GitHub API] ✅ PR #${pr.number} successfully merged into ${base}!`);
+  return { pr, mergeResult };
+}
+
 module.exports = {
   createIssue,
   createPullRequest,
   mergePullRequest,
-  closeIssue
+  closeIssue,
+  promoteBranchWithPR
 };
 
 // CLI Command execution support
 if (require.main === module) {
   const [,, command, ...args] = process.argv;
   (async () => {
-    if (command === 'create-issue') {
-      const [title, body, labels] = args;
-      await createIssue(title, body, labels ? labels.split(',') : []);
-    } else if (command === 'create-pr') {
-      const [title, head, base, body] = args;
-      await createPullRequest(title, head, base, body);
-    } else if (command === 'merge-pr') {
-      const [pullNumber, commitTitle] = args;
-      await mergePullRequest(parseInt(pullNumber, 10), commitTitle);
-    } else if (command === 'close-issue') {
-      const [issueNumber] = args;
-      await closeIssue(parseInt(issueNumber, 10));
+    try {
+      if (command === 'create-issue') {
+        const [title, body, labels] = args;
+        await createIssue(title, body, labels ? labels.split(',') : []);
+      } else if (command === 'create-pr') {
+        const [title, head, base, body] = args;
+        await createPullRequest(title, head, base, body);
+      } else if (command === 'merge-pr') {
+        const [pullNumber, commitTitle] = args;
+        await mergePullRequest(parseInt(pullNumber, 10), commitTitle);
+      } else if (command === 'promote-pr') {
+        const [head, base, title, body] = args;
+        await promoteBranchWithPR(head, base, title, body);
+      } else if (command === 'close-issue') {
+        const [issueNumber] = args;
+        await closeIssue(parseInt(issueNumber, 10));
+      }
+    } catch (err) {
+      console.error('[GitHub CLI] Error:', err.message);
+      process.exit(1);
     }
   })();
 }
