@@ -396,7 +396,7 @@ export default function App() {
           <DevDatabaseExplorerView
             tables={dbTables}
             databaseName="jkadhp_dev"
-            onRunQuery={(q) => api.runDbQuery(q)}
+            onRunQuery={(q, db) => api.runDbQuery(q, db)}
           />
         )}
       </main>

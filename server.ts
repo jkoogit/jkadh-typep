@@ -276,18 +276,378 @@ Always provide concrete TypeScript interfaces, 3 scenarios (Normal, Error, Excep
     res.json({ success: true, data: INITIAL_ARCHITECTURAL_PROPOSALS });
   });
 
-  // API 8: Database Explorer for jkadhp_dev
-  app.get('/api/db/tables', (req, res) => {
-    res.json({ success: true, data: dbTables, database: 'jkadhp_dev' });
+  // In-memory / dynamic configuration for Remote DB Bridge
+  const validSecret = (process.env.REMOTE_DB_BRIDGE_SECRET && process.env.REMOTE_DB_BRIDGE_SECRET.length > 8)
+    ? process.env.REMOTE_DB_BRIDGE_SECRET
+    : 'jkadh-secure-secret-token-2026';
+
+  let remoteBridgeConfig = {
+    url: process.env.REMOTE_DB_BRIDGE_URL || 'https://ptype.pdfrend.com',
+    secret: validSecret,
+    targetDatabase: process.env.TARGET_DATABASE || 'jkadh_dev',
+    lastCheckedAt: null as string | null,
+    lastStatus: 'UNCONFIGURED' as 'CONNECTED' | 'ERROR' | 'UNCONFIGURED',
+    lastError: null as string | null,
+    lastLatencyMs: 0,
+    pgVersion: null as string | null,
+    actualDatabase: null as string | null,
+  };
+
+  // Helper function to call the remote Ubuntu DB Bridge
+  async function callRemoteBridge(path: string, method = 'GET', body?: any, customUrl?: string, customSecret?: string) {
+    const baseUrl = (customUrl || remoteBridgeConfig.url || '').trim().replace(/\/+$/, '');
+    if (!baseUrl) {
+      throw new Error('Remote DB Bridge URL is not configured. Please provide your Cloudflare Tunnel URL (e.g. https://xxxx.trycloudflare.com)');
+    }
+    const secret = customSecret || remoteBridgeConfig.secret;
+    const url = `${baseUrl}${path}`;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-JKADH-SECRET': secret,
+      'Authorization': `Bearer ${secret}`,
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+    const start = Date.now();
+    try {
+      let response = await fetch(url, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+
+      // If 404 and path had /api, try without /api or vice-versa
+      if (response.status === 404 && path.startsWith('/api/')) {
+        const altPath = path.replace('/api/', '/');
+        response = await fetch(`${baseUrl}${altPath}`, {
+          method,
+          headers,
+          body: body ? JSON.stringify(body) : undefined,
+          signal: controller.signal,
+        });
+      }
+
+      clearTimeout(timeoutId);
+      const latencyMs = Date.now() - start;
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error((data && (data.error || data.message)) || `HTTP ${response.status}: ${response.statusText}`);
+      }
+      return { success: true, data, latencyMs };
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      const latencyMs = Date.now() - start;
+      if (err.name === 'AbortError') {
+        throw new Error(`Connection timed out after 12s to ${url}`);
+      }
+      throw new Error(err.message || 'Failed to connect to remote DB bridge');
+    }
+  }
+
+  // API 8.1: Remote DB Bridge Configuration & Status
+  app.get('/api/remote-db/config', (req, res) => {
+    res.json({
+      success: true,
+      config: {
+        url: remoteBridgeConfig.url,
+        hasSecret: Boolean(remoteBridgeConfig.secret),
+        targetDatabase: remoteBridgeConfig.targetDatabase,
+        lastStatus: remoteBridgeConfig.lastStatus,
+        lastCheckedAt: remoteBridgeConfig.lastCheckedAt,
+        lastError: remoteBridgeConfig.lastError,
+        lastLatencyMs: remoteBridgeConfig.lastLatencyMs,
+        pgVersion: remoteBridgeConfig.pgVersion,
+        actualDatabase: remoteBridgeConfig.actualDatabase,
+      },
+    });
   });
 
-  app.post('/api/db/query', (req, res) => {
-    const { query } = req.body;
-    const lower = (query || '').toLowerCase().trim();
+  app.post('/api/remote-db/config', (req, res) => {
+    const { url, secret, targetDatabase } = req.body;
+    if (url !== undefined) remoteBridgeConfig.url = url.trim();
+    if (secret !== undefined) remoteBridgeConfig.secret = secret.trim();
+    if (targetDatabase !== undefined) remoteBridgeConfig.targetDatabase = targetDatabase.trim() || 'jkadhp_dev';
+    
+    // Reset status on config change
+    remoteBridgeConfig.lastStatus = remoteBridgeConfig.url ? 'UNCONFIGURED' : 'UNCONFIGURED';
+    remoteBridgeConfig.lastError = null;
 
+    res.json({
+      success: true,
+      message: 'Remote DB Bridge configuration updated successfully.',
+      config: {
+        url: remoteBridgeConfig.url,
+        hasSecret: Boolean(remoteBridgeConfig.secret),
+        targetDatabase: remoteBridgeConfig.targetDatabase,
+      },
+    });
+  });
+
+  // API 8.2: Live Remote DB Connection Test (Diagnostic Ping)
+  app.post('/api/remote-db/test-connection', async (req, res) => {
+    const { url, secret, targetDatabase } = req.body;
+    const testUrl = url || remoteBridgeConfig.url;
+    const testSecret = secret || remoteBridgeConfig.secret;
+    const dbName = targetDatabase || remoteBridgeConfig.targetDatabase || 'jkadhp_dev';
+
+    try {
+      // 1. Health check call to Ubuntu Gateway
+      const healthResult = await callRemoteBridge(`/api/health?db=${encodeURIComponent(dbName)}`, 'GET', undefined, testUrl, testSecret);
+
+      // 2. Query diagnostic info (server time, active database, pg version, DB size)
+      const queryResult = await callRemoteBridge('/api/query', 'POST', {
+        database: dbName,
+        sql: `SELECT 
+                current_database() as db_name, 
+                current_user as db_user, 
+                version() as pg_version, 
+                NOW() as server_now, 
+                pg_size_pretty(pg_database_size(current_database())) as db_size;`,
+      }, testUrl, testSecret);
+
+      // Update state
+      remoteBridgeConfig.lastStatus = 'CONNECTED';
+      remoteBridgeConfig.lastCheckedAt = new Date().toISOString();
+      remoteBridgeConfig.lastError = null;
+      remoteBridgeConfig.lastLatencyMs = healthResult.latencyMs;
+      remoteBridgeConfig.actualDatabase = dbName;
+      if (queryResult.data?.rows?.[0]?.pg_version) {
+        remoteBridgeConfig.pgVersion = queryResult.data.rows[0].pg_version;
+      }
+
+      res.json({
+        success: true,
+        status: 'CONNECTED',
+        latencyMs: healthResult.latencyMs,
+        database: dbName,
+        diagnostics: queryResult.data?.rows?.[0] || healthResult.data,
+        message: `Successfully connected to Ubuntu PostgreSQL [${dbName}] via Cloudflare Bridge (${healthResult.latencyMs}ms)!`,
+      });
+    } catch (err: any) {
+      remoteBridgeConfig.lastStatus = 'ERROR';
+      remoteBridgeConfig.lastCheckedAt = new Date().toISOString();
+      remoteBridgeConfig.lastError = err.message;
+
+      res.status(500).json({
+        success: false,
+        status: 'ERROR',
+        error: err.message,
+        message: `Connection to Ubuntu DB Bridge failed: ${err.message}`,
+      });
+    }
+  });
+
+  // API 8.3: Initialize Schema on Ubuntu PostgreSQL
+  app.post('/api/remote-db/init-schema', async (req, res) => {
+    const { database } = req.body;
+    const dbName = database || remoteBridgeConfig.targetDatabase || 'jkadhp_dev';
+
+    const ddlScript = `
+      -- 1. AI Accounts Table
+      CREATE TABLE IF NOT EXISTS ai_accounts (
+        id VARCHAR(64) PRIMARY KEY,
+        provider VARCHAR(32) NOT NULL,
+        account_name VARCHAR(128) NOT NULL,
+        total_token_quota BIGINT DEFAULT 10000000,
+        used_tokens BIGINT DEFAULT 0,
+        remaining_tokens BIGINT DEFAULT 10000000,
+        cost_monthly_limit_usd NUMERIC(10,2) DEFAULT 200.00,
+        current_cost_usd NUMERIC(10,2) DEFAULT 0.00,
+        status VARCHAR(32) DEFAULT 'HEALTHY',
+        reg_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        mod_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- 2. Task Nodes Table
+      CREATE TABLE IF NOT EXISTS task_nodes (
+        id VARCHAR(64) PRIMARY KEY,
+        code VARCHAR(64) NOT NULL UNIQUE,
+        title VARCHAR(256) NOT NULL,
+        module VARCHAR(64) NOT NULL,
+        current_phase INT DEFAULT 1,
+        status VARCHAR(32) DEFAULT 'NOT_STARTED',
+        spec_validation_score INT DEFAULT 0,
+        assigned_to VARCHAR(64),
+        reg_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        mod_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- 3. Execution Metrics Table
+      CREATE TABLE IF NOT EXISTS execution_metrics (
+        id SERIAL PRIMARY KEY,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        tokens_consumed INT NOT NULL,
+        cost_usd NUMERIC(10,4) DEFAULT 0.0,
+        latency_ms INT DEFAULT 0,
+        model_name VARCHAR(64),
+        task_code VARCHAR(64),
+        user_id VARCHAR(64),
+        status VARCHAR(32) DEFAULT 'SUCCESS'
+      );
+
+      -- 4. Seed initial accounts if empty
+      INSERT INTO ai_accounts (id, provider, account_name, total_token_quota, used_tokens, remaining_tokens, cost_monthly_limit_usd, status)
+      VALUES 
+        ('acc_ant_01', 'ANTHROPIC', 'Anthropic Team Tier 4 (Primary)', 20000000, 3420000, 16580000, 400.00, 'HEALTHY'),
+        ('acc_oai_01', 'OPENAI', 'OpenAI Tier 5 Shared Enterprise', 15000000, 4890000, 10110000, 300.00, 'HEALTHY'),
+        ('acc_gem_01', 'GOOGLE', 'Google Gemini 3.7 Pro Platform (High-Speed)', 30000000, 2100000, 27900000, 150.00, 'HEALTHY')
+      ON CONFLICT (id) DO NOTHING;
+    `;
+
+    try {
+      const result = await callRemoteBridge('/api/query', 'POST', {
+        database: dbName,
+        sql: ddlScript,
+      });
+
+      res.json({
+        success: true,
+        message: `Schema successfully initialized and synchronized on Ubuntu PostgreSQL [${dbName}]!`,
+        result: result.data,
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: err.message,
+      });
+    }
+  });
+
+  // API 8.4: Database Explorer for multi-DB (Live Remote or Local Baseline)
+  app.get('/api/db/tables', async (req, res) => {
+    const targetDb = (req.query.db as string) || remoteBridgeConfig.targetDatabase || 'jkadh_dev';
+
+    // If Remote DB Bridge is configured, query real PostgreSQL metadata
+    if (remoteBridgeConfig.url) {
+      try {
+        const schemaQuery = `
+          SELECT 
+            t.table_name,
+            COALESCE(c.reltuples::bigint, 0) as row_count,
+            pg_size_pretty(pg_total_relation_size(c.oid)) as total_size
+          FROM information_schema.tables t
+          LEFT JOIN pg_class c ON c.relname = t.table_name
+          WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
+          ORDER BY t.table_name;
+        `;
+        const result = await callRemoteBridge('/api/query', 'POST', {
+          database: targetDb,
+          sql: schemaQuery,
+        });
+
+        if (result.data?.rows && result.data.rows.length > 0) {
+          // Also fetch columns for all tables in one query
+          const columnsQuery = `
+            SELECT 
+              c.table_name,
+              c.column_name,
+              c.data_type,
+              c.is_nullable,
+              c.column_default,
+              CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END as is_primary
+            FROM information_schema.columns c
+            LEFT JOIN (
+              SELECT kcu.table_name, kcu.column_name
+              FROM information_schema.table_constraints tc
+              JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+              WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_schema = 'public'
+            ) pk ON pk.table_name = c.table_name AND pk.column_name = c.column_name
+            WHERE c.table_schema = 'public'
+            ORDER BY c.table_name, c.ordinal_position;
+          `;
+          let columnsByTable: Record<string, any[]> = {};
+          try {
+            const colResult = await callRemoteBridge('/api/query', 'POST', {
+              database: targetDb,
+              sql: columnsQuery,
+            });
+            if (colResult.data?.rows) {
+              for (const col of colResult.data.rows) {
+                if (!columnsByTable[col.table_name]) {
+                  columnsByTable[col.table_name] = [];
+                }
+                columnsByTable[col.table_name].push({
+                  name: col.column_name,
+                  type: col.data_type.toUpperCase(),
+                  isPrimary: col.is_primary === true || col.is_primary === 'true',
+                  isNullable: col.is_nullable === 'YES',
+                  description: col.column_default ? `Default: ${col.column_default}` : (col.is_primary ? 'Primary Key' : 'Field column'),
+                });
+              }
+            }
+          } catch (colErr) {
+            console.warn('Columns fetch warning:', colErr);
+          }
+
+          const liveTables = result.data.rows.map((row: any) => ({
+            tableName: row.table_name,
+            description: `Live table on Ubuntu PostgreSQL [${targetDb}] (${row.total_size || '0 kB'})`,
+            rowCount: Number(row.row_count) >= 0 ? Number(row.row_count) : 0,
+            sizeKb: 16,
+            columns: columnsByTable[row.table_name] || [
+              { name: 'id', type: 'VARCHAR/SERIAL', isPrimary: true, isNullable: false, description: 'Primary Key' },
+            ],
+          }));
+          return res.json({ success: true, data: liveTables, database: targetDb, isRemote: true });
+        }
+      } catch (err) {
+        console.warn('Could not fetch remote table metadata, falling back to baseline schema:', err);
+      }
+    }
+
+    res.json({ success: true, data: dbTables, database: targetDb, isRemote: false });
+  });
+
+  app.post('/api/db/query', async (req, res) => {
+    const { query, database } = req.body;
+    const targetDb = database || remoteBridgeConfig.targetDatabase || 'jkadhp_dev';
+    const sql = (query || '').trim();
+
+    // If Remote DB Bridge is active, execute directly on the Ubuntu server!
+    if (remoteBridgeConfig.url) {
+      try {
+        const remoteResult = await callRemoteBridge('/api/query', 'POST', {
+          database: targetDb,
+          sql,
+        });
+
+        const rows = remoteResult.data?.rows || [];
+        const columns = rows.length > 0 ? Object.keys(rows[0]) : ['result'];
+
+        return res.json({
+          success: true,
+          isRemote: true,
+          database: targetDb,
+          rowCount: remoteResult.data?.rowCount ?? rows.length,
+          columns,
+          rows,
+          executionTimeMs: remoteResult.latencyMs,
+          message: `Query executed on remote Ubuntu PostgreSQL [${targetDb}] via Cloudflare Bridge (${remoteResult.latencyMs}ms).`,
+        });
+      } catch (err: any) {
+        // Return clear error if remote execution failed
+        return res.status(500).json({
+          success: false,
+          isRemote: true,
+          error: err.message,
+          message: `Remote PostgreSQL execution error: ${err.message}`,
+        });
+      }
+    }
+
+    // Fallback: Local simulated query processor
+    const lower = sql.toLowerCase();
     if (lower.includes('select') && lower.includes('ai_accounts')) {
       return res.json({
         success: true,
+        isRemote: false,
+        database: targetDb,
         rowCount: accounts.length,
         columns: ['id', 'provider', 'account_name', 'total_token_quota', 'used_tokens', 'remaining_tokens', 'status'],
         rows: accounts.map((a) => ({
@@ -306,6 +666,8 @@ Always provide concrete TypeScript interfaces, 3 scenarios (Normal, Error, Excep
     if (lower.includes('select') && lower.includes('task_nodes')) {
       return res.json({
         success: true,
+        isRemote: false,
+        database: targetDb,
         rowCount: taskGraph.length,
         columns: ['id', 'code', 'title', 'module', 'status', 'current_phase', 'spec_score'],
         rows: taskGraph.map((t) => ({
@@ -324,19 +686,22 @@ Always provide concrete TypeScript interfaces, 3 scenarios (Normal, Error, Excep
     // Default simulated query result
     res.json({
       success: true,
+      isRemote: false,
+      database: targetDb,
       rowCount: 1,
       columns: ['status', 'message', 'database', 'schema'],
       rows: [
         {
           status: 'SUCCESS',
-          message: `Query executed on PostgreSQL database 'jkadhp_dev'. Transaction committed.`,
-          database: 'jkadhp_dev',
+          message: `Query executed on baseline dev database '${targetDb}'. Connect remote bridge in top-bar to query live Ubuntu PostgreSQL!`,
+          database: targetDb,
           schema: 'public',
         },
       ],
       executionTimeMs: 5.1,
     });
   });
+
 
   // API 9: Real-time Dashboard Metrics
   app.get('/api/metrics', (req, res) => {
