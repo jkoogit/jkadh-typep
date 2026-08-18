@@ -48,6 +48,7 @@ export const DocumentationView: React.FC<DocumentationViewProps> = ({
     { id: 'RBAC', label: '팀 계정 & 권한', icon: Users },
     { id: 'DATABASE', label: 'jkadhp_dev DB', icon: Database },
     { id: 'RUNBOOK', label: '운영 런북 & 복구', icon: Terminal },
+    { id: 'RETROSPECTIVE', label: '세션 회고 보고서', icon: FileText },
   ];
 
   const filteredSections = sections.filter((sec) => {

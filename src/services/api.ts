@@ -86,6 +86,64 @@ export const api = {
     return res.json();
   },
 
+  async getCurrentSession() {
+    const res = await fetch('/api/session/current');
+    return res.json();
+  },
+
+  async sendSessionHeartbeat() {
+    const res = await fetch('/api/session/heartbeat', {
+      method: 'POST',
+    });
+    return res.json();
+  },
+
+  async upsertSession(sessionData: any) {
+    const res = await fetch('/api/session/upsert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sessionData),
+    });
+    return res.json();
+  },
+
+  async getTaskLoops(taskId: string) {
+    const res = await fetch(`/api/tasks/${taskId}/loops`);
+    return res.json();
+  },
+
+  async recordTaskLoop(taskId: string, loopPayload: any) {
+    const res = await fetch(`/api/tasks/${taskId}/loops`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(loopPayload),
+    });
+    return res.json();
+  },
+
+  async reportGateActionFeedback(feedbackPayload: {
+    taskId: string;
+    phaseNumber: number;
+    actionId: string;
+    category: string;
+    result?: string;
+    targetModelId?: string;
+  }) {
+    const res = await fetch('/api/gate/action-feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(feedbackPayload),
+    });
+    return res.json();
+  },
+
+  async evaluatePhaseGate(taskId: string, phaseNumber: number) {
+    const res = await fetch(`/api/tasks/${taskId}/phase/${phaseNumber}/evaluate-gate`, {
+      method: 'POST',
+    });
+    return res.json();
+  },
+
   async vibeOrchestrate(params: {
     taskId?: string;
     phaseNumber: number;
@@ -157,12 +215,35 @@ export const api = {
     return res.json();
   },
 
-  async initRemoteDbSchema(database?: string) {
+  async initRemoteDbSchema(options?: {
+    database?: string;
+    scope?: 'ALL' | 'GROUP' | 'TABLE';
+    targetTable?: string;
+    targetGroup?: 'HARNESS_GOV' | 'CORE_OPS' | 'META_INFRA';
+    targetVersion?: string;
+  } | string) {
+    const payload = typeof options === 'string' ? { database: options } : options || {};
     const res = await fetch('/api/remote-db/init-schema', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ database }),
+      body: JSON.stringify(payload),
     });
+    return res.json();
+  },
+
+  async checkRemoteDbSchema(database?: string): Promise<{
+    success: boolean;
+    isRemote: boolean;
+    targetDatabase: string;
+    targetVersion: string;
+    currentDbVersion: string | null;
+    isUpToDate: boolean;
+    appliedMigrations: any[];
+    pendingMigrations: string[];
+    lastCheckedAt?: string;
+  }> {
+    const url = database ? `/api/remote-db/schema-check?db=${encodeURIComponent(database)}` : '/api/remote-db/schema-check';
+    const res = await fetch(url);
     return res.json();
   },
 

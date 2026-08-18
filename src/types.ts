@@ -9,6 +9,77 @@ export interface AuditMetadata {
   mod_dt: string;
 }
 
+// -----------------------------------------------------------------------------
+// 1. Session Governance & DB Management Types
+// -----------------------------------------------------------------------------
+export type SessionStatus = 'ACTIVE' | 'PAUSED' | 'DRAINED' | 'COMPLETED' | 'TERMINATED' | 'STALE' | 'RECOVERED';
+
+export interface HarnessSessionRecord extends AuditMetadata {
+  id: string;
+  session_code: string;
+  user_id: string;
+  user_email: string;
+  user_role: MemberRole;
+  target_database: string;
+  active_task_id?: string;
+  active_task_code?: string;
+  active_phase_num: number;
+  session_goal: string;
+  status: SessionStatus;
+  started_at: string;
+  last_heartbeat_at: string;
+  heartbeat_interval_sec?: number;
+  is_recovered?: boolean;
+  ended_at?: string;
+  tokens_consumed: number;
+  cost_usd: number;
+  execution_count: number;
+  savepoint_name?: string;
+  next_handoff_brief?: string;
+  git_branch?: string;
+  git_commit_hash?: string;
+  release_tag?: string;
+  report_doc_path?: string;
+}
+
+// -----------------------------------------------------------------------------
+// 2. Stage Gate Completion & Prescriptive Action Proposal Types
+// -----------------------------------------------------------------------------
+export type GateCriterionStatus = 'PENDING' | 'PASSED' | 'FAILED' | 'SKIPPED';
+
+export type ActionCategory = 'ADVANCE' | 'RETRY_FIX' | 'FALLBACK_SWAP' | 'SAVEPOINT_ROLLBACK' | 'HUMAN_APPROVAL' | 'PROMOTION';
+
+export interface PrescriptiveActionProposal {
+  actionId: string;
+  category: ActionCategory;
+  title: string;
+  description: string;
+  recommendedModelId?: string;
+  commandSnippet?: string;
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  isAutoExecutable: boolean;
+  impactSummary: string;
+}
+
+export interface GatekeeperEvaluationResult {
+  taskId: string;
+  phaseNumber: number;
+  phaseCode: string;
+  overallScore: number; // 0-100
+  passed: boolean;
+  blockers: string[];
+  warnings: string[];
+  criteriaEvaluations: {
+    criterionId: string;
+    description: string;
+    status: GateCriterionStatus;
+    rule: string;
+    details: string;
+  }[];
+  prescriptiveActions: PrescriptiveActionProposal[];
+  evaluatedAt: string;
+}
+
 export interface UserAccount extends AuditMetadata {
   id: string;
   name: string;
@@ -92,8 +163,11 @@ export interface AIAccount {
   currentCostUSD: number;
   status: 'HEALTHY' | 'WARNING' | 'EXHAUSTED' | 'RATE_LIMITED' | 'ERROR';
   errorCount24h: number;
+  circuitState?: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
   cooldownUntil?: string;
+  consecutiveFailures?: number;
   primaryFallbackModelId?: string;
+  fallbackProvider?: string;
   tier: 'Enterprise' | 'PayAsYouGo' | 'Tier-4' | 'Developer';
 }
 
@@ -178,6 +252,12 @@ export interface TaskGraphNode {
   description: string;
   phases: LifecyclePhase[];
   gitBranch?: string;
+  targetGitBranch?: 'dev' | 'stg' | 'main';
+  releaseTag?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  lockedBySessionId?: string;
+  lockAcquiredAt?: string;
   specValidationScore: number; // 0-100
   derivedFromTaskId?: string; // e.g. 'node-ocr-engine'
   derivedFromTaskCode?: string; // e.g. 'PDF-OCR-04'
@@ -211,6 +291,9 @@ export interface ExecutionMetric {
 export interface DatabaseTableMeta {
   tableName: string;
   description: string;
+  tableComment?: string;
+  detectedVersion?: string;
+  isVersionSynchronized?: boolean;
   rowCount: number;
   sizeKb: number;
   columns: {

@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Layers,
+  Activity,
   Cpu,
   Users,
   Database,
@@ -19,6 +20,7 @@ import {
 import { UserAccount } from '../types';
 
 export type TabType =
+  | 'SESSION'
   | 'LIFECYCLE'
   | 'DOCUMENTATION'
   | 'PROPOSALS'
@@ -134,6 +136,18 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Navigation Tabs */}
         <div className="flex space-x-1 overflow-x-auto no-scrollbar border-t border-[#30363D] py-1">
+          <button
+            onClick={() => setActiveTab('SESSION')}
+            className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
+              activeTab === 'SESSION'
+                ? 'bg-blue-600/20 text-blue-300 border border-blue-500/40 ring-1 ring-blue-500/20'
+                : 'text-[#7D8590] hover:text-[#E6EDF3] hover:bg-[#21262D]/60'
+            }`}
+          >
+            <Activity className="w-3.5 h-3.5 text-blue-400" />
+            <span className="font-semibold">세션 거버넌스 &amp; 하네스 제어</span>
+          </button>
+
           <button
             onClick={() => setActiveTab('LIFECYCLE')}
             className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${

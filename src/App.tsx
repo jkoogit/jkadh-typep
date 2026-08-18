@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Header, TabType } from './components/Header';
+import { SessionGovernanceView } from './components/SessionGovernanceView';
 import { ProposalView } from './components/ProposalView';
 import { LifecycleOrchestratorView } from './components/LifecycleOrchestratorView';
 import { DocumentationView } from './components/DocumentationView';
@@ -338,6 +339,14 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {activeTab === 'SESSION' && (
+          <SessionGovernanceView
+            tasks={tasks}
+            selectedTaskId={selectedTaskId}
+            onSelectTask={(id) => setSelectedTaskId(id)}
+          />
+        )}
+
         {activeTab === 'PROPOSALS' && (
           <ProposalView
             proposals={proposals}

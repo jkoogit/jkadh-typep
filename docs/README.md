@@ -19,6 +19,17 @@
 | **09** | `09-harness-architecture-comparison.md`| 하네스 7대 영역 & 루프 상태머신 | 세션/태스크 시작-처리-정리-승급-종료 및 7종 루프 제어 | v1.2.0 |
 | **10** | `10-auth-security-vault.md` | 회원 RBAC 및 AES-256 Vault | SUPER_ADMIN 승격, API Key 암호화 볼트, 루프 트랜잭션 DDL | v1.0.0 |
 | **11** | `11-session-report-standard.md` | 세션 회고 보고서 작성 규격 | 보고서 명명 규칙, DAG 단위 작업, 메타 헤더 및 표준 템플릿 | v1.0.0 |
+| **12** | `12-task-lifecycle-governance-process.md` | JKADH 6대 하네스 라이프사이클 거버넌스 | #세션시작(한글세션명), #태스크시작(task/*브랜치/이슈발행), #태스크처리, #태스크정리(PR), #태스크승급, #세션정리 | v1.1.0 |
+
+---
+
+## 📑 이슈 및 풀 리퀘스트 거버넌스 (`/docs/issues`, `/docs/pull_requests`)
+
+| 번호/식별자 | 이슈 파일명 | PR 파일명 | 작업 브랜치 / 연결 태스크 및 승급 상태 |
+|---|---|---|---|
+| **#1** | `01-task-graph-dual-dag.md` | `01-task-graph-dual-dag.md` | `task/task-graph-dual-dag` (`PDF-OCR-04`) - `MERGED` |
+| **#2** | `02-granular-schema-migration.md` | `03-granular-schema-migration.md` | `task/db-granular-schema-migration` (`v1.6.0`) - `MERGED` |
+| **#3** | `03-pdf-form-signature-07.md` | `04-pdf-form-signature-07.md` | `task/pdf-form-signature-07` (`PDF-FORM-07`, `v1.7.0`) - `MERGED` |
 
 ---
 
@@ -27,6 +38,9 @@
 | 일자/순번 | 리포트 파일명 | 세션 ID | 작업 내용 및 주요 결산 |
 |---|---|---|---|
 | **01 (08-16)** | `01-2026-08-16-세션종료-회고-보고서.md` | `SES-20260816-AUTH-VAULT-02` | RBAC, AES-256 Vault, 7종 루프 상태머신 완료 및 [PDF-OCR-04] 인계 브리프 |
+| **02 (08-17)** | `02-2026-08-17-세션종료-회고-보고서.md` | `SES-20260817-GATE-PROMOTION-01` | 7단계 Gatekeeper 통과 및 [PDF-OCR-04] 승급 완료 |
+| **03 (08-18)** | `03-2026-08-18-세션종료-회고-보고서.md` | `SES-20260818-PDF-TABLE-05` | 듀얼 DAG 관리 체계, 스키마 마이그레이션 고도화 및 세션 정례 결산 |
+| **04 (08-18)** | `04-2026-08-18-세션종료-회고-보고서.md` | `SES-20260818-PDF-FORM-07` | 6대 거버넌스 수립, [PDF-FORM-07] AcroForm/PAdES 전자서명 엔진 완료 (`v1.7.0`) |
 
 ---
 
