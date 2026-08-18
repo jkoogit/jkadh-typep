@@ -39,17 +39,23 @@ AI 어시스턴트는 사용자의 개발 요청을 수신했을 때 무분별�
 ---
 
 ### 4. #태스크정리 (Task Wrap-Up)
-- **구현내용 PR 생성 (로컬 문서 + 원격 레포)**:
+- **🚨 절대 dev 직접 커밋/로컬 직병합 금지 (Strict No-Direct-Commit to `dev`)**:
+  - 모든 소스코드 수정은 반드시 `task/{태스크명}` 브랜치에서만 커밋하고 원격 저장소에 푸시(`git push origin task/...`)합니다.
+- **원격 GitHub PR 생성 (로컬 문서 + GitHub REST API)**:
   - `/docs/pull_requests/{번호}-{태스크명}.md` 문서를 생성합니다.
-  - 원격 저장소에 `task/*` ➔ `dev` 대상 PR을 등록하고 이슈(#)를 링크합니다.
-- **원격 dev 브랜치 머지**: 작업 브랜치를 `dev`에 안전하게 병합합니다.
-- **작업자 소스 리뷰**: 변경 내역 최종 검토 및 빌드 무결성을 확인합니다.
+  - GitHub REST API (`node scripts/githubSync.cjs create-pr` 또는 `promoteBranchWithPR`)를 호출하여 원격 **GitHub Pull Request(PR)**를 공식 생성하고, 작업 브랜치(`task/*`)와 타겟(`dev`), 해결 이슈(`Resolves #...`) 및 상세 변경 명세를 등록합니다.
+- **원격 dev 브랜치 PR 머지**:
+  - GitHub API (`node scripts/githubSync.cjs merge-pr`)를 통해 원격 PR을 `dev`에 머지한 후, 로컬 `dev`를 pull하여 최신 상태로 동기화합니다.
+- **작업자 소스 리뷰**: PR 내 변경 파일 Diff 최종 검토 및 빌드 무결성을 확인합니다.
 - **태스크승급 프롬프트 작성**: 상위 환경 승급을 위한 `#태스크승급` 프롬프트를 출력합니다.
 
 ---
 
 ### 5. #태스크승급 (Task Promotion)
-- **다단계 승급 처리**: `dev` 배포 소스를 `stg` 및 `main` 브랜치로 단계별 승급 배포합니다.
+- **다단계 승급 처리 (반드시 원격 PR 생성 및 머지 거버넌스 준수)**:
+  - `dev` ➔ `stg` 대상 GitHub PR을 원격에 생성하고 머지합니다 (`node scripts/githubSync.cjs promote-pr dev stg ...`).
+  - `stg` ➔ `main` 대상 GitHub PR을 원격에 생성하고 머지합니다 (`node scripts/githubSync.cjs promote-pr stg main ...`).
+  - 릴리즈 태그(`v*.*.*`)를 생성하고 원격에 푸시합니다.
 - **미구현 기능 및 보완사항 정리**: 작업 완료 내역 및 추가 파생 백로그를 결산합니다.
 - **태스크 정보 정리 (DB)**: `task_nodes.status = 'DONE'` 갱신 및 `phase_gate_logs` 점수를 기록합니다.
 - **작업목록 및 다음 프롬프트 표시**:
