@@ -106,19 +106,66 @@ export const api = {
     return res.json();
   },
 
-  async getDbTables(): Promise<{ success: boolean; data: DatabaseTableMeta[]; database: string }> {
-    const res = await fetch('/api/db/tables');
+  async getDbTables(database?: string): Promise<{ success: boolean; data: DatabaseTableMeta[]; database: string; isRemote?: boolean }> {
+    const url = database ? `/api/db/tables?db=${encodeURIComponent(database)}` : '/api/db/tables';
+    const res = await fetch(url);
     return res.json();
   },
 
-  async runDbQuery(query: string) {
+  async runDbQuery(query: string, database?: string) {
     const res = await fetch('/api/db/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query, database }),
     });
     return res.json();
   },
+
+  async getRemoteDbConfig(): Promise<{
+    success: boolean;
+    config: {
+      url: string;
+      hasSecret: boolean;
+      targetDatabase: string;
+      lastStatus: 'CONNECTED' | 'ERROR' | 'UNCONFIGURED';
+      lastCheckedAt: string | null;
+      lastError: string | null;
+      lastLatencyMs: number;
+      pgVersion: string | null;
+      actualDatabase: string | null;
+    };
+  }> {
+    const res = await fetch('/api/remote-db/config');
+    return res.json();
+  },
+
+  async updateRemoteDbConfig(payload: { url?: string; secret?: string; targetDatabase?: string }) {
+    const res = await fetch('/api/remote-db/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return res.json();
+  },
+
+  async testRemoteDbConnection(payload?: { url?: string; secret?: string; targetDatabase?: string }) {
+    const res = await fetch('/api/remote-db/test-connection', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    });
+    return res.json();
+  },
+
+  async initRemoteDbSchema(database?: string) {
+    const res = await fetch('/api/remote-db/init-schema', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ database }),
+    });
+    return res.json();
+  },
+
 
   async getMetrics(): Promise<{
     success: boolean;

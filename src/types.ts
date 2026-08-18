@@ -18,11 +18,11 @@ export interface UserAccount extends AuditMetadata {
   dailyTokenLimit: number;
   tokensUsedToday: number;
   monthlyBudgetUSD: number;
-  costUsedUSD: number;
+  costUsedUSD?: number;
   status: 'ACTIVE' | 'SUSPENDED' | 'RATE_LIMITED';
   isSuperAdmin: boolean;
   avatar: string;
-  allowedModels: string[];
+  allowedModels?: string[];
 }
 
 export interface UserApiVaultItem extends AuditMetadata {
@@ -188,7 +188,7 @@ export interface TaskGraphNode {
 
 export interface DocumentationSection {
   id: string;
-  category: 'METHODOLOGY' | 'LIFECYCLE' | 'TASK_GRAPH' | 'HARNESS' | 'REFACTORING' | 'MODELS' | 'DATABASE' | 'RBAC' | 'RUNBOOK';
+  category: 'METHODOLOGY' | 'LIFECYCLE' | 'TASK_GRAPH' | 'HARNESS' | 'REFACTORING' | 'MODELS' | 'DATABASE' | 'RBAC' | 'RUNBOOK' | 'RETROSPECTIVE' | 'PROCESS';
   titleKr: string;
   titleEn: string;
   summary: string;
