@@ -113,6 +113,11 @@ export class PdfFormSignatureEngine {
   private async parseAcroFormDictionary(
     buffer: Uint8Array | ArrayBuffer
   ): Promise<{ fields: PdfFormField[]; signatures: PdfSignatureSpec[] }> {
+    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    // Check if buffer contains standard %PDF- magic bytes
+    if (bytes.length < 8 || bytes[0] !== 0x25 || bytes[1] !== 0x50 || bytes[2] !== 0x44 || bytes[3] !== 0x46) {
+      return { fields: [], signatures: [] };
+    }
     const fields: PdfFormField[] = [
       {
         id: 'fld-01-applicant-name',
