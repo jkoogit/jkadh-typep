@@ -4,8 +4,9 @@
 **jkadh (Jin-Kyu Architecture & Development Harness)**는 대규모 언어 모델(LLM)과 에이전틱(Agentic) AI 코딩 환경에서 발생하는 고유한 한계점—**환각(Hallucination), 스펙 드리프트(Specification Drift), 불완전한 예외 처리, 비결정론적 코드 생성, 토큰 쿼터 고갈**—을 공학적으로 통제하기 위해 설계된 엔터프라이즈 아키텍처 거버넌스 표준입니다.
 
 ## 1.2 핵심 문제의식 및 프로젝트 타깃
-* **대상 프로젝트**: **PDFowers** (대규모 문서 지능화, 고해상도 OCR, 복합 표 추출, DRM 워터마크, AES-256 암호화 및 무손실 분할/병합 파이프라인)
-* **인프라 제약**: 스테이징/운영(stg/prd) 분리 없는 **단일 개발 데이터베이스 (`jkadhp_dev`, PostgreSQL 16.2)** 환경
+* **본 저장소 대상**: **JKADH AI 개발 플랫폼 (DevPlatform)** - AI 모델 거버넌스, 6대 라이프사이클 하네스, 멀티 모델 라우터, 단일 DB 트랜잭션 격리 및 스키마 관리 플랫폼
+* **타겟 서비스 프로젝트 (향후 독립 이관)**: **PDFowers** (대규모 문서 지능화, 고해상도 OCR, 복합 표 추출, DRM 워터마크, AES-256 암호화 및 무손실 분할/병합 파이프라인)
+* **인프라 제약**: 스테이징/운영(stg/prd) 분리 없는 **단일 개발 데이터베이스 (`jkadhp_dev`, PostgreSQL 16.2/17.10)** 환경
 * **핵심 해결 과제**:
   1. 사전 토큰 계산 오차 및 비정형 출력 시 실시간 무중단 핫스왑 Fallback 체인 구축
   2. 단순 프롬프트 바이브코딩의 모호성을 제거하는 7단계 Phase Gatekeeper 규칙 강제
@@ -38,3 +39,17 @@
 
 ### 4. Continuous Quality Gate (연속 품질 게이트)
 단순한 코드 생성이 아닌, 7단계 전 공정에서 프로그래밍된 Gatekeeper 규칙(의존성 무결성, 3대 시나리오 완비, JSON Schema 적합성, 테스트 통과, 린트/컴파일 무오류)을 통과해야만 다음 단계로 전진합니다.
+
+---
+
+## 1.4 플랫폼 저장소 vs 타겟 서비스 저장소 분리 원칙 (Repository Segregation)
+
+```
+[본 플랫폼 저장소: jkadh-typep] ───────(뼈대 안정화 후 이관)───────> [신설 타겟 서비스 저장소: pdfowers-service]
+• AI 플랫폼 뼈대/거버넌스/하네스                                 • 엔드유저 PDF 뷰어/편집 상용 서비스
+• Multi-Model Router & Circuit Breaker                         • PDF-CORE, OCR, TABLE, FORM, CRYPTO, MERGE
+• Single-DB Transactional Isolation                            • 독자적 타겟 서비스 작업그래프(DAG) 운영
+```
+
+현재 본 저장소의 작업 대상은 **AI 개발 플랫폼 구축 및 안정화**이며, 기존에 구현된 PDF 비즈니스 엔진들은 `/docs/pending_target_service_migration/`에 안전하게 보류·동결되어 향후 타겟 서비스 레포지토리 구축 시 100% 온전하게 이관됩니다.
+

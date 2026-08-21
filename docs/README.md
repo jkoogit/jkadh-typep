@@ -8,6 +8,7 @@
 
 | 번호 | 문서 파일명 | 문서 제목 | 핵심 내용 | 개정 버전 |
 |---|---|---|---|---|
+| **00** | `00-terminology-glossary.md` | 서비스 체계 용어 정의 & 커뮤니케이션 | 기본서비스(인프라/플랫폼) vs 대상서비스(PDF) 용어 및 모호성 해결 원칙 | v1.0.0 |
 | **01** | `01-architecture-overview.md` | 아키텍처 총괄 개요 | 3계층 아키텍처, 실시간 오케스트레이션, 무중단 서킷 브레이커 | v1.1.0 |
 | **02** | `02-7phase-lifecycle.md` | 7단계 딜리버리 라이프사이클 | Phase 1~7 공정 정의 및 Gatekeeper 0% 스펙 드리프트 검증 규칙 | v1.1.0 |
 | **03** | `03-refactoring-standards.md` | 리팩토링 및 클린 코드 표준 | 단일 책임 원칙, AST 정적 검증, 안티패턴 방지 | v1.1.0 |
@@ -20,6 +21,10 @@
 | **10** | `10-auth-security-vault.md` | 회원 RBAC 및 AES-256 Vault | SUPER_ADMIN 승격, API Key 암호화 볼트, 루프 트랜잭션 DDL | v1.0.0 |
 | **11** | `11-session-report-standard.md` | 세션 회고 보고서 작성 규격 | 보고서 명명 규칙, DAG 단위 작업, 메타 헤더 및 표준 템플릿 | v1.0.0 |
 | **12** | `12-task-lifecycle-governance-process.md` | JKADH 6대 하네스 라이프사이클 거버넌스 | #세션시작(한글세션명), #태스크시작(task/*브랜치/이슈발행), #태스크처리, #태스크정리(PR), #태스크승급, #세션정리 | v1.1.0 |
+| **13** | `13-code-quality-and-lint-standards.md` | 코드 품질 및 린트 거버넌스 기준서 | TypeScript 컴파일러 린트, 7-Phase AST 4대 필터 및 6대 감사 컬럼 표준 | v1.0.0 |
+| **14** | `14-harness-test-cases-catalog.md` | 하네스 라이프사이클 테스트케이스 목록 | 3대 시나리오(정상/예외/오류) 8대 메타데이터 테스트케이스 카탈로그 | v1.0.0 |
+| **15** | `15-table-governance-and-json-audit-trail-standards.md` | 테이블 관리 및 JSON 이력 거버넌스 표준 | 3-Tier 대상 분류, 표준 JSONB 감사 이력 스키마, 생애주기 및 6대 감사 컬럼 | v1.1.0 |
+| **16** | `16-design-patterns-and-technical-architecture-catalog.md` | 디자인 패턴 및 기술 아키텍처 구현 카탈로그 | Strategy, Factory, Circuit Breaker 등 비즈니스 로직 패턴화 및 적용기능 라이프사이클 | v1.0.0 |
 
 ---
 
@@ -30,6 +35,24 @@
 | **#1** | `01-task-graph-dual-dag.md` | `01-task-graph-dual-dag.md` | `task/task-graph-dual-dag` (`PDF-OCR-04`) - `MERGED` |
 | **#2** | `02-granular-schema-migration.md` | `03-granular-schema-migration.md` | `task/db-granular-schema-migration` (`v1.6.0`) - `MERGED` |
 | **#3** | `03-pdf-form-signature-07.md` | `04-pdf-form-signature-07.md` | `task/pdf-form-signature-07` (`PDF-FORM-07`, `v1.7.0`) - `MERGED` |
+| **#6** | `06-vibe-runner-sandbox.md` | `07-vibe-runner-sandbox.md` | `task/vibe-runner-sandbox` (`PLAT-VIBE-06`, `v2.0.0`) - `MERGED` |
+| **#7** | `07-harness-lifecycle-cli.md` | `08-harness-lifecycle-cli.md` | `task/harness-lifecycle-cli` (`PLAT-CLI-07`, `v2.1.0`) - `MERGED` (Resolves #14) |
+| **#8** | `08-telemetry-circuit-breaker.md` | - (작성예정) | `task/token-quota-telemetry` (`PLAT-MON-08`, `v2.2.0`) - `IN_PROGRESS` (Issue #14) |
+
+
+
+---
+
+## 📦 타겟 서비스(PDF 뷰어) 분리 이관 대기 보류 문서 (`/docs/pending_target_service_migration`)
+
+| 번호 | 문서 파일명 | 문서 제목 | 핵심 내용 | 이관 대상 레포 |
+|---|---|---|---|---|
+| **00** | `00-TARGET-SERVICE-MIGRATION-POLICY.md` | 타겟 서비스 분리 이관 정책 및 거버넌스 원칙 | 플랫폼 레포(`jkadh-typep`) vs 타겟 서비스 레포 분리 기준 및 이관 절차 | `pdfowers-service` |
+| **01** | `01-PDF-CORE-OCR-TABLE-INVENTORY.md` | PDF 코어 스트림, OCR & 표 추출 엔진 인벤토리 | `PDF-CORE-01`, `PDF-OCR-04`, `PDF-TABLE-05` 구현 자산 및 이관 계획 | `pdfowers-service` |
+| **02** | `02-PDF-FORM-SIGNATURE-INVENTORY.md` | PDF 폼 및 전자서명(PAdES) 엔진 인벤토리 | `PDF-FORM-07` AcroForm 및 PAdES 전자서명 구현 자산 및 이관 계획 | `pdfowers-service` |
+| **03** | `03-PDF-CRYPTO-PII-INVENTORY.md` | PII 마스킹 & AES-256 암호화 엔진 인벤토리 | `PDF-CRYPTO-03` PII 비식별화 및 AES-256-GCM 암호화 구현 자산 | `pdfowers-service` |
+| **04** | `04-PDF-MERGE-SPLIT-INVENTORY.md` | 무손실 PDF 다중 병합/분할 엔진 인벤토리 | `PDF-MERGE-06` 무손실 병합/분할 및 XREF 북마크 보존 구현 자산 | `pdfowers-service` |
+| **05** | `05-TARGET-REPO-DAG-BLUEPRINT.md` | 타겟 서비스 전용 레포 DAG 구축 설계서 | 타겟 서비스 저장소 전용 L1/L2 DAG 구조 및 마일스톤 설계 | `pdfowers-service` |
 
 ---
 

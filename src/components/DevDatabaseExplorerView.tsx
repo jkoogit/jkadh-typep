@@ -109,12 +109,14 @@ interface DevDatabaseExplorerViewProps {
   tables: DatabaseTableMeta[];
   databaseName: string;
   onRunQuery: (query: string, database?: string) => Promise<any>;
+  onNavigateToAuditTrail?: (tableName?: string) => void;
 }
 
 export const DevDatabaseExplorerView: React.FC<DevDatabaseExplorerViewProps> = ({
   tables: initialTables,
   databaseName: initialDbName,
   onRunQuery,
+  onNavigateToAuditTrail,
 }) => {
   const [targetDb, setTargetDb] = useState<string>(initialDbName || 'jkadhp_dev');
   const [tables, setTables] = useState<DatabaseTableMeta[]>(initialTables);
@@ -380,10 +382,10 @@ export const DevDatabaseExplorerView: React.FC<DevDatabaseExplorerViewProps> = (
 
   return (
     <div className="space-y-4">
-      {/* 1. Remote Gateway Connection Status Banner */}
-      <div className="p-4 rounded-xl bg-[#161B22] border border-[#30363D] flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      {/* 1. Remote Gateway Connection Status Banner (상하 열거 레이아웃) */}
+      <div className="p-4 rounded-xl bg-[#161B22] border border-[#30363D] space-y-3.5 shadow-xs">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="flex h-2.5 w-2.5 relative">
               {connStatus === 'CONNECTED' && (
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -442,8 +444,8 @@ export const DevDatabaseExplorerView: React.FC<DevDatabaseExplorerViewProps> = (
           </p>
         </div>
 
-        {/* Action Controls & Granular Sync Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Action Controls & Granular Sync Action Buttons (하단 배치) */}
+        <div className="pt-2 border-t border-[#30363D]/70 flex flex-wrap items-center gap-2">
           <button
             onClick={() => testConnection()}
             disabled={connStatus === 'TESTING'}
@@ -981,6 +983,17 @@ export const DevDatabaseExplorerView: React.FC<DevDatabaseExplorerViewProps> = (
                     <Plus className="w-3.5 h-3.5" />
                     <span>새 레코드 추가</span>
                   </button>
+
+                  {onNavigateToAuditTrail && (
+                    <button
+                      onClick={() => onNavigateToAuditTrail(selectedTable.tableName)}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-950/40 hover:bg-indigo-900/60 border border-indigo-500/40 text-indigo-300 hover:text-indigo-200 text-xs font-semibold transition cursor-pointer"
+                      title="이 테이블의 변경이력 (JSON Diff)을 조회합니다"
+                    >
+                      <History className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>변경이력 조회</span>
+                    </button>
+                  )}
                 </div>
               </div>
 

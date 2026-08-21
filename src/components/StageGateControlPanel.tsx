@@ -106,8 +106,8 @@ export const StageGateControlPanel: React.FC<StageGateControlPanelProps> = ({
 
   return (
     <div className="bg-[#161B22] border border-blue-500/30 rounded-xl p-4 space-y-4 shadow-sm">
-      {/* 1. Stage Gate Header & Status Badge */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#30363D] pb-3">
+      {/* 1. Stage Gate Header & Status Badge (상하 열거 레이아웃) */}
+      <div className="space-y-3 border-b border-[#30363D] pb-3">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
             <span className="p-1 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/30">
@@ -122,7 +122,8 @@ export const StageGateControlPanel: React.FC<StageGateControlPanelProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Action Controls & Gate Badge (하단 배치) */}
+        <div className="pt-2 border-t border-[#30363D]/70 flex flex-wrap items-center gap-2">
           <button
             onClick={fetchGatekeeperEvaluation}
             disabled={isLoading}

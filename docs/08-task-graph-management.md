@@ -1,24 +1,29 @@
 # 8. 작업그래프(Task Graph DAG) 관리 및 브랜치형 누적·파생 이력 체계
 
-## 8.1 2계층 작업그래프(Dual-Graph) 아키텍처 개요
+## 8.1 2계층 작업그래프(Dual-Graph) 아키텍처 및 저장소 분리 원칙
 
-**jkadh 작업그래프**는 프로젝트 진행 중 도출되는 신규 파생 요구사항과 기존 구현 이력을 명확히 구분하여 관리하기 위해 **상단 '미진행 파생 백로그 그래프'**와 **하단 '상향 누적(Bottom-up) 작업 이력 그래프'**의 **2계층 듀얼 그래프(Dual-Graph)** 구조를 채택합니다.
+**jkadh 작업그래프**는 **[AI 개발 플랫폼 자체 구축 활성 DAG]**와 **[타겟 서비스(PDF 뷰어) 분리 이관 대기 보류 그래프]**를 엄격히 구분하여 관리합니다.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ [상단] 미진행 작업 및 파생 백로그 그래프 (Pending & Derived Graph)          │
-│  - 선행 작업 진행 중 도출된 파생 요구사항 (표 추출, 폼 자동화, PII 마스킹) │
-│  - 파생 원천 노드 (Ancestry), 추가 시점 (Timestamp), 추가 사유 명시       │
-│  - 선행 작업 완료 시 즉시 개발 단계로 자동 승급 대기                     │
+│ [1영역: 활성] JKADH AI 개발 플랫폼 뼈대 구축 DAG (Active Platform DAG)     │
+│  - 6대 하네스 라이프사이클 거버넌스 (PLAT-GOV-01)                       │
+│  - 멀티 모델 3-Tier Fallback 서킷 브레이커 (PLAT-ROUTER-02)              │
+│  - AES-256 API Key 암호화 볼트 & 팀 RBAC 권한 격리 (PLAT-VAULT-03)       │
+│  - 단일 DB(jkadhp_dev) 트랜잭션 격리 및 스키마 매니저 (PLAT-DB-04)        │
+│  - 2계층 듀얼 작업그래프(DAG) 오케스트레이터 (PLAT-DAG-05)              │
+│  - 실시간 7-Phase Vibe Runner 샌드박스 (PLAT-VIBE-06)                   │
 └──────────────────────────────────────────────────────────────────────────┘
-                                   ▲
-                         (선후행 의존성 연결 & 승급)
-                                   │
+                                   ║
+       [격리 보관 경계: /docs/pending_target_service_migration/]
+                                   ║
+                                   ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ [하단] 진행 및 완료 작업 이력 그래프 (Active & History DAG - Bottom Up)    │
-│  - 맨 위(Head): 현재 실시간 개발·동기화 중인 최신 작업 (PDF-OCR-04)        │
-│  - 중간: 검증 및 완료된 기능 브랜치 (PDF-WATERMARK-02, PDF-RENDER-02)    │
-│  - 맨 아래(Base): 프로젝트 초기 기반 작업 (PDF-CORE-01)                  │
+│ [2영역: 보류/이관대기] 타겟 서비스 비즈니스 엔진 (On-Hold Migration Backlog) │
+│  - 타겟 저장소: github.com/jkoogit/pdfowers-service (신설 예정)          │
+│  - 보류 모듈: PDF-CORE-01, PDF-OCR-04, PDF-TABLE-05, PDF-FORM-07,       │
+│              PDF-CRYPTO-03, PDF-MERGE-06                                │
+│  - 이관 절차: 플랫폼 뼈대 안정화 완료 후 타겟 전용 레포로 100% 완전 이전 │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -28,78 +33,87 @@
 
 ```text
 ================================================================================
-[상단 1영역] 미진행 작업 및 파생 백로그 그래프 (PENDING & DERIVED TASKS)
+[상단 1영역] JKADH AI 개발 플랫폼 핵심 인프라 활성 DAG (ACTIVE PLATFORM DAG)
 ================================================================================
-*   (TASK-07) [BACKLOG] PDF-FORM-07: 대화형 PDF 폼(AcroForm/XFA) 필드 자동 인식 및 서명
-│   ├── 파생 원천: PDF-TABLE-05 (비정형 표 감지 엔진 확장으로 신청서 폼 자동화 요구 도출)
-│   ├── 추가 시점: 2026-08-15 11:45 (PDF-TABLE-05 표 기획 회의 중 분기)
-│   └── 목표 릴리즈: v1.2 / 담당: 김민지
+*   (PLAT-08) [BACKLOG] PLAT-MON-08: 토큰 쿼터 실시간 텔레메트리 & 서킷 브레이커 웹훅
+│   ├── 의존: PLAT-ROUTER-02, PLAT-VAULT-03
+│   └── 목표: 실시간 AI 비용 모니터링 & Slack 알림 연동 / 담당: 이대원
 │
-*   (TASK-06) [PLANNED] PDF-TABLE-05: PDF 비구조화 표(Table) AI 감지 및 Excel 변환
-│   ├── 파생 원천: PDF-OCR-04 (스캔 표 내부 셀 좌표 및 계층 구조 파싱 요구 도출)
-│   ├── 추가 시점: 2026-08-15 11:30 (PDF-OCR-04 Phase 6 검토 중 분기)
-│   └── 선행 해제: PDF-OCR-04 (DONE 전이 시 DEVELOPING 자동 승급)
+*   (PLAT-07) [BACKLOG] PLAT-CLI-07: 하네스 6대 라이프사이클 통합 CLI & GitHub PR 자동화
+│   ├── 의존: PLAT-GOV-01, PLAT-VIBE-06
+│   └── 목표: 로컬 터미널 및 CI/CD 환경 거버넌스 자동화 / 담당: 구진규
 │
-*   (TASK-04) [ANALYSIS] PDF-CRYPTO-03: 개인정보(PII) 마스킹 & AES-256 암호화 보안
-│   ├── 파생 원천: PDF-OCR-04 (금융/의료 PDF 내 민감 개인정보 자동 비식별화 규제)
-│   ├── 추가 시점: 2026-08-14 16:00 (보안 컴플라이언스 감사 회의)
-│   └── 선행 해제: PDF-OCR-04 / 담당: 이대원
+*   (PLAT-06) [DONE] PLAT-VIBE-06: 실시간 7-Phase Vibe Runner 및 AST 자동 검증기
+│   ├── 의존: PLAT-DAG-05, PLAT-ROUTER-02
+│   └── 완료: 실시간 코드 생성 샌드박스 및 TypeScript AST 정적 무결점 검증 엔진 구축 / 담당: 구진규
 │
-*   (TASK-05) [BACKLOG] PDF-MERGE-06: 무손실 PDF 다중 병합/분할 및 북마크 보존
-    ├── 파생 원천: PDF-CORE-01 (기반 스트림 파서 연계)
-    ├── 추가 시점: 2026-08-10 11:00 (초기 로드맵 WBS)
-    └── 목표 릴리즈: v1.2 / 담당: 박준호
+*   (PLAT-MIG) [DONE: Milestone] PLAT-MIG-00: 타겟 서비스(PDF 뷰어) 분리·보류 및 이관 인벤토리 수립 ⭐️
+│   ├── 의존: PLAT-GOV-01, PLAT-DAG-05
+│   ├── 시점: 2026-08-19 15:30 (타겟 서비스 분리 결정 및 보류 거버넌스 발효)
+│   └── 완료: 6대 PDF 모듈 ON_HOLD 전환 및 /docs/pending_target_service_migration/ 수립
+│
+*   (PLAT-05) [DONE] PLAT-DAG-05: 2계층 듀얼 작업그래프(DAG) 오케스트레이터 & 시각화
+│   ├── 의존: PLAT-GOV-01
+│   └── 완료: 상향식 이력 및 파생 백로그 실시간 렌더링 검증 완료
+│
+*   (PLAT-04) [DONE] PLAT-DB-04: PostgreSQL 단일 DB Savepoint 격리 & 스키마 관리자
+│   ├── 의존: PLAT-GOV-01
+│   └── 완료: 6대 공통 감사 컬럼 주입, v2.2.0 스키마 동기화 완료
+│
+*   (PLAT-03) [DONE] PLAT-VAULT-03: AES-256 API Key 볼트 & 팀 RBAC 권한 격리
+│   ├── 의존: PLAT-GOV-01
+│   └── 완료: SUPER_ADMIN 승격 및 암호화 볼트 보안 감사 완료
+│
+*   (PLAT-02) [DONE] PLAT-ROUTER-02: 멀티 모델(Claude/Codex/Gemini) 3-Tier Fallback
+│   ├── 의존: PLAT-GOV-01
+│   └── 완료: 429 RateLimit 시 300ms 내 핫스왑 복구 엔진 완료
+│
+*   (PLAT-01) [DONE: Foundation Base] PLAT-GOV-01: 6대 하네스 라이프사이클 거버넌스
+    └── 완료: #세션시작 -> #태스크시작 -> #태스크처리 -> #태스크정리 -> #태스크승급 -> #세션정리 표준 수립
 
 --------------------------------------------------------------------------------
-▲ [의존성 전이 경계: 선행 작업 완료 시 상단 백로그로 자동 트리거 발송]
+▲ [분리 격리 경계: 플랫폼 뼈대 완료 후 타겟 서비스 레포지토리로 순차 이관]
 --------------------------------------------------------------------------------
 
 ================================================================================
-[하단 2영역] 진행 및 완료 작업 이력 그래프 (BOTTOM-UP WORK HISTORY DAG)
+[하단 2영역] 타겟 서비스(PDFowers) 분리 이관 대기 보류 목록 (ON-HOLD MIGRATION)
 ================================================================================
-▲ [최신 완료 및 승급 작업 (Head)]
-│
-*   (TASK-03) [DONE: Phase 7] PDF-OCR-04: 다국어 고해상도 OCR & 레이아웃 좌표 추출 ⭐️
-|\  ├── 의존: PDF-CORE-01 (스트림 파서)
-| | ├── 회복: Claude 3.7 ➔ 429 시 Gemini 3.7 Flash 핫스왑 검증 통과 (100점)
-| | └── 완료: 7단계 문서화 및 작업그래프 DB 실시간 동기화 완료 (승급 완료)
-| |
-* | (TASK-02) [DONE: Phase 7] PDF-WATERMARK-02: 동적 벡터 워터마크 및 DRM 스탬프 엔진
-|/  ├── 의존: PDF-CORE-01
-|   └── 완료: Skia 래스터 기반 반투명 회전 렌더러 검증 완료 (100% Pass)
-|
-*   (TASK-01) [DONE: Phase 7] PDF-RENDER-02: Skia 기반 고해상도 PDF 래스터라이저 엔진
-|   ├── 의존: PDF-CORE-01
-|   └── 완료: 300DPI 텍스트 셰이딩 및 벡터 래스터라이징 검증 완료
-|
-*   (TASK-00) [DONE: Foundation Base] PDF-CORE-01: PDF 토큰 스트림 파서 & 가상 메모리 매퍼
-    ├── 의존: None (루트 기반 작업)
-    ├── 추가 시점: 2026-08-10 09:00 (프로젝트 킥오프 WBS)
-    └── 완료: 복합 압축 스트림(FlateDecode) 파싱 및 청크 스트림 분할 안정화
-▼ [프로젝트 초기 기반 작업 (Foundation Base)]
+*   (TASK-HOLD-05) [ON_HOLD] PDF-MERGE-06: 무손실 PDF 다중 병합/분할 및 북마크 보존 (v1.9.0)
+*   (TASK-HOLD-04) [ON_HOLD] PDF-CRYPTO-03: 개인정보(PII) 마스킹 & AES-256 암호화 (v1.8.0)
+*   (TASK-HOLD-03) [ON_HOLD] PDF-FORM-07: 대화형 PDF 폼 자동인식 & PAdES 전자서명 (v1.7.0)
+*   (TASK-HOLD-02) [ON_HOLD] PDF-TABLE-05: PDF 비구조화 표(Table) AI 감지 및 Excel 변환
+*   (TASK-HOLD-01) [ON_HOLD] PDF-OCR-04: 다국어 고해상도 OCR & 레이아웃 좌표 추출
+*   (TASK-HOLD-00) [ON_HOLD] PDF-CORE-01: PDF 토큰 스트림 파서 & 가상 메모리 매퍼
 ```
 
 ---
 
-## 8.3 미진행 및 파생 작업 명세표 (Pending Tasks & Lineage)
+## 8.3 활성 기본서비스(플랫폼) 작업 명세표 (Active Base Service Tasks)
 
-| 작업 코드 | 작업명 | 상태 | 파생 원천 (Ancestry) | 추가 시점 (Timestamp) | 추가 배경 및 사유 | 목표 마일스톤 |
-|---|---|---|---|---|---|---|
-| **`PDF-FORM-07`** | 대화형 PDF 폼 자동인식 & 서명 | `BACKLOG` | `PDF-TABLE-05` | 2026-08-15 11:45 | 표 감지 파서 확장으로 전자 신청서 양식 자동 완성 요구 도출 | `v1.2` |
-| **`PDF-TABLE-05`** | 비구조화 표 AI 감지 및 Excel 변환 | `DEVELOPING` | `PDF-OCR-04` | 2026-08-15 11:30 | 선행 `PDF-OCR-04` 완료로 의존성 잠금 해제 ➔ 착수 승급 | `v1.1-rc1` |
-| **`PDF-CRYPTO-03`**| 개인정보(PII) 마스킹 & AES-256 | `ANALYSIS` | `PDF-OCR-04` | 2026-08-14 16:00 | 금융/의료 PDF 내 민감 개인정보(PII) 자동 비식별화 규제 준수 | `v1.1-rc1` |
-| **`PDF-MERGE-06`** | 무손실 PDF 다중 병합/분할 | `BACKLOG` | `PDF-CORE-01` | 2026-08-10 11:00 | 대용량 분할 PDF의 비동기 병합 및 북마크 XREF 재구성 편의 기능 | `v1.2` |
+| 작업 코드 | 작업명 | 모듈 | 선행 의존 노드 | 상태 | 현재 단계 | 담당 / 모델 |
+|---|---|---|---|:---:|:---:|---|
+| **`PLAT-GOV-01`** | 6대 하네스 라이프사이클 거버넌스 | `GOVERNANCE` | None (Root) | **`DONE`** | Phase 7 완료 | 구진규 / Claude 3.7 |
+| **`PLAT-ROUTER-02`**| 멀티 모델 3-Tier Fallback 라우터 | `MODEL_ROUTER` | `PLAT-GOV-01` | **`DONE`** | Phase 7 완료 | 구진규 / Claude ➔ Gemini |
+| **`PLAT-VAULT-03`** | AES-256 API Key 볼트 & 팀 RBAC | `SECURITY_VAULT`| `PLAT-GOV-01` | **`DONE`** | Phase 7 완료 | 구진규 / Codex |
+| **`PLAT-DB-04`** | PostgreSQL 단일 DB 트랜잭션 격리 | `DB_MIGRATION` | `PLAT-GOV-01` | **`DONE`** | Phase 7 완료 | 구진규 / Gemini Flash |
+| **`PLAT-DAG-05`** | 2계층 듀얼 작업그래프 오케스트레이터 | `ORCHESTRATOR` | `PLAT-GOV-01` | **`DONE`** | Phase 7 완료 | 구진규 / Claude 3.7 |
+| **`PLAT-MIG-00`** | 타겟 서비스 분리·보류 거버넌스 수립 | `GOVERNANCE` | `PLAT-DAG-05` | **`DONE`** | Phase 7 완료 (2026-08-19) | 구진규 / Claude 3.7 |
+| **`PLAT-VIBE-06`** | 실시간 7-Phase Vibe Runner 샌드박스 | `VIBE_RUNNER` | `PLAT-DAG-05` | **`DONE`** | Phase 7 완료 | 구진규 / Claude 3.7 |
+| **`PLAT-CLI-07`** | 하네스 6대 라이프사이클 통합 CLI | `GOVERNANCE` | `PLAT-GOV-01` | **`BACKLOG`** | Phase 1 대기 | 구진규 / Codex |
+| **`PLAT-MON-08`** | 토큰 쿼터 실시간 텔레메트리 & 웹훅 | `MODEL_ROUTER` | `PLAT-ROUTER-02`| **`BACKLOG`** | Phase 1 대기 | 이대원 / Gemini Flash |
 
 ---
 
-## 8.4 진행 및 완료 작업 이력 명세표 (Active & History Tasks)
+## 8.4 타겟 서비스 이관 대기 보류 명세표 (On-Hold Target Tasks)
 
-| 작업 코드 | 작업명 | 모듈 | 선행 의존 노드 | 상태 | 현재 단계 | 담당 / 모델 |
-|---|---|---|---|---|---|---|
-| **`PDF-OCR-04`** | 다국어 고해상도 OCR & 레이아웃 좌표 | OCR | `PDF-CORE-01` | **`DONE`** | **Phase 7 (검증·동기화 완료)** | 구진규 / Claude ➔ Gemini |
-| **`PDF-WATERMARK-02`**| 동적 벡터 워터마크 및 DRM 스탬프 | Watermark | `PDF-CORE-01` | **`DONE`** | Phase 7 (검증 완료) | 김민지 / Codex |
-| **`PDF-RENDER-02`** | Skia 기반 고해상도 PDF 래스터라이저 | Rendering | `PDF-CORE-01` | **`DONE`** | Phase 7 (완료) | 김민지 / Codex |
-| **`PDF-CORE-01`** | PDF 스트림 파서 & 가상 메모리 매퍼 | Core Engine | None (Root Base) | **`DONE`** | Phase 7 (완료) | 구진규 / Claude 3.7 |
+| 작업 코드 | 작업명 | 기 구현 파일 | 타겟 서비스 이관 대상 경로 | 이관 상태 |
+|---|---|---|---|:---:|
+| **`PDF-CORE-01`** | PDF 스트림 파서 & 가상 메모리 매퍼 | `src/data/initialData.ts` | `packages/core/src/parser/` | `ON_HOLD_READY` |
+| **`PDF-OCR-04`** | 다국어 고해상도 OCR & 좌표 추출 | `src/data/initialData.ts` | `packages/ocr/src/engine/` | `ON_HOLD_READY` |
+| **`PDF-TABLE-05`** | 비구조화 표 AI 감지 및 Excel 변환 | `src/services/PdfTableExtractor.ts` | `packages/table/src/extractor/` | `ON_HOLD_READY` |
+| **`PDF-FORM-07`** | 대화형 PDF 폼 자동인식 & 서명 | `src/services/PdfFormSignatureEngine.ts` | `packages/form/src/signer/` | `ON_HOLD_READY` |
+| **`PDF-CRYPTO-03`**| 개인정보(PII) 마스킹 & AES-256 | `src/services/PdfCryptoRedactionEngine.ts` | `packages/security/src/crypto/` | `ON_HOLD_READY` |
+| **`PDF-MERGE-06`** | 무손실 PDF 다중 병합/분할 | `src/services/PdfMergeSplitEngine.ts` | `packages/merge-split/src/engine/` | `ON_HOLD_READY` |
 
 ---
 

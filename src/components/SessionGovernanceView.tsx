@@ -133,10 +133,10 @@ export const SessionGovernanceView: React.FC<SessionGovernanceViewProps> = ({
 
   return (
     <div className="space-y-5">
-      {/* 1. Top Session Status Card */}
-      <div className="p-5 rounded-xl bg-[#161B22] border border-[#30363D] shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* 1. Top Session Status Card (상하 열거 레이아웃) */}
+      <div className="p-5 rounded-xl bg-[#161B22] border border-[#30363D] shadow-xs space-y-3.5">
         <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+          <div className="w-10 h-10 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
             <Terminal className="w-5 h-5" />
           </div>
           <div>
@@ -154,7 +154,7 @@ export const SessionGovernanceView: React.FC<SessionGovernanceViewProps> = ({
                 ● {session?.status || 'ACTIVE'}
               </span>
             </div>
-            <p className="text-xs text-[#7D8590] mt-0.5 flex items-center gap-2">
+            <p className="text-xs text-[#7D8590] mt-0.5 flex flex-wrap items-center gap-2">
               <span>사용자: <strong className="text-[#E6EDF3]">{session?.user_email}</strong></span>
               <span>•</span>
               <span className="text-emerald-400 font-mono">DB: {session?.target_database}</span>
@@ -164,7 +164,8 @@ export const SessionGovernanceView: React.FC<SessionGovernanceViewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Action Controls (하단 배치) */}
+        <div className="pt-2 border-t border-[#30363D]/70 flex flex-wrap items-center gap-2">
           <button
             onClick={loadSession}
             disabled={isLoading}

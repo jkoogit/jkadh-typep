@@ -20,6 +20,14 @@ import {
   Milestone,
   HelpCircle,
   TrendingUp,
+  Cpu,
+  Database,
+  Lock,
+  Workflow,
+  PlayCircle,
+  Archive,
+  Layers,
+  ExternalLink,
 } from 'lucide-react';
 import { TaskGraphNode } from '../types';
 
@@ -35,9 +43,22 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
   onSelectTask,
 }) => {
   const [viewMode, setViewMode] = useState<'BRANCH' | 'GRID'>('BRANCH');
+  const [activeTab, setActiveTab] = useState<'ALL' | 'PLATFORM' | 'ON_HOLD'>('ALL');
 
   const getModuleIcon = (module: TaskGraphNode['module']) => {
     switch (module) {
+      case 'GOVERNANCE':
+        return <Workflow className="w-3.5 h-3.5 text-indigo-400" />;
+      case 'MODEL_ROUTER':
+        return <Cpu className="w-3.5 h-3.5 text-cyan-400" />;
+      case 'SECURITY_VAULT':
+        return <Lock className="w-3.5 h-3.5 text-emerald-400" />;
+      case 'DB_MIGRATION':
+        return <Database className="w-3.5 h-3.5 text-amber-400" />;
+      case 'ORCHESTRATOR':
+        return <Layers className="w-3.5 h-3.5 text-purple-400" />;
+      case 'VIBE_RUNNER':
+        return <PlayCircle className="w-3.5 h-3.5 text-pink-400" />;
       case 'OCR':
         return <ScanLine className="w-3.5 h-3.5 text-amber-400" />;
       case 'TABLE_EXTRACT':
@@ -60,6 +81,12 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold border border-emerald-500/30">
             <CheckCircle2 className="w-3 h-3" /> 완료 (DONE)
+          </span>
+        );
+      case 'ON_HOLD':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 text-[10px] font-semibold border border-amber-500/30">
+            <Archive className="w-3 h-3" /> 보류·이관대기
           </span>
         );
       case 'DEVELOPING':
@@ -95,17 +122,22 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
     }
   };
 
-  // 1. Pending / Unstarted tasks (미진행된 작업 영역: PLANNED, ANALYSIS, BACKLOG)
-  const pendingTasks = tasks
+  // Filter tasks based on Platform Core vs Target Service Migration
+  const platformTasks = tasks.filter((t) => t.targetRepo !== 'pdfowers-service' && t.status !== 'ON_HOLD');
+  const onHoldTasks = tasks.filter((t) => t.targetRepo === 'pdfowers-service' || t.status === 'ON_HOLD');
+
+  const activeTasks = activeTab === 'PLATFORM' ? platformTasks : activeTab === 'ON_HOLD' ? onHoldTasks : tasks;
+
+  // 1. Pending / Unstarted tasks in active selection
+  const pendingTasks = activeTasks
     .filter((t) => t.status === 'PLANNED' || t.status === 'ANALYSIS' || t.status === 'BACKLOG')
     .sort((a, b) => {
       const priority: Record<string, number> = { PLANNED: 3, ANALYSIS: 2, BACKLOG: 1 };
       return (priority[b.status] || 0) - (priority[a.status] || 0);
     });
 
-  // 2. Active in-progress & Completed History tasks (진행 및 완료 작업 이력: DEVELOPING, TESTED, DONE)
-  // Stacked bottom-up: Root foundation (PDF-CORE-01) at bottom -> latest in-progress (PDF-OCR-04) at top
-  const historyTasks = tasks
+  // 2. Completed / In-progress tasks in active selection
+  const historyTasks = activeTasks
     .filter((t) => t.status === 'DONE' || t.status === 'TESTED' || t.status === 'DEVELOPING')
     .sort((a, b) => {
       if (a.dependencies.includes(b.id)) return -1;
@@ -116,23 +148,58 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Top Header with Switcher */}
-      <div className="flex items-center justify-between">
+      {/* Top Header with Switcher and Repo Filter (상하 열거 레이아웃) */}
+      <div className="p-3.5 rounded-xl bg-[#161B22] border border-[#30363D] space-y-3 shadow-xs">
         <div>
           <h3 className="text-xs font-bold text-[#E6EDF3] flex items-center gap-1.5">
             <GitBranch className="w-3.5 h-3.5 text-blue-400" />
-            PDFowers 통합 작업그래프 & 브랜치 파생 체계
+            2계층 듀얼 작업그래프(DAG) & 원격 레포 분리 거버넌스
           </h3>
           <p className="text-[11px] text-[#7D8590] mt-0.5">
-            상단: 미진행 파생 백로그 그래프 | 하단: 상향 누적(Bottom-up) 작업 이력 그래프
+            AI 개발 플랫폼 인프라 활성 DAG 및 타겟 서비스(PDF 뷰어) 분리 이관 대기 체계
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="pt-2 border-t border-[#30363D]/70 flex items-center justify-between gap-2 flex-wrap">
+          {/* Repository Scope Selector */}
+          <div className="flex items-center bg-[#0D1117] p-0.5 rounded-lg border border-[#30363D]">
+            <button
+              onClick={() => setActiveTab('ALL')}
+              className={`px-2 py-1 rounded text-[10px] font-medium transition-all cursor-pointer ${
+                activeTab === 'ALL'
+                  ? 'bg-slate-700/60 text-[#E6EDF3] shadow-sm font-bold'
+                  : 'text-[#7D8590] hover:text-[#E6EDF3]'
+              }`}
+            >
+              전체 ({tasks.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('PLATFORM')}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-all cursor-pointer ${
+                activeTab === 'PLATFORM'
+                  ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 shadow-sm font-bold'
+                  : 'text-[#7D8590] hover:text-[#E6EDF3]'
+              }`}
+            >
+              <Cpu className="w-3 h-3 text-indigo-400" /> 플랫폼 활성 DAG ({platformTasks.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('ON_HOLD')}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-all cursor-pointer ${
+                activeTab === 'ON_HOLD'
+                  ? 'bg-amber-600/30 text-amber-300 border border-amber-500/40 shadow-sm font-bold'
+                  : 'text-[#7D8590] hover:text-[#E6EDF3]'
+              }`}
+            >
+              <Archive className="w-3 h-3 text-amber-400" /> 타겟 보류 목록 ({onHoldTasks.length})
+            </button>
+          </div>
+
+          {/* View Mode Switcher */}
           <div className="flex items-center bg-[#0D1117] p-0.5 rounded-lg border border-[#30363D]">
             <button
               onClick={() => setViewMode('BRANCH')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-all ${
+              className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-all cursor-pointer ${
                 viewMode === 'BRANCH'
                   ? 'bg-blue-600/30 text-blue-300 border border-blue-500/40 shadow-sm'
                   : 'text-[#7D8590] hover:text-[#E6EDF3]'
@@ -142,7 +209,7 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
             </button>
             <button
               onClick={() => setViewMode('GRID')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-all ${
+              className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-all cursor-pointer ${
                 viewMode === 'GRID'
                   ? 'bg-blue-600/30 text-blue-300 border border-blue-500/40 shadow-sm'
                   : 'text-[#7D8590] hover:text-[#E6EDF3]'
@@ -153,6 +220,19 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Target Repository Migration Info Banner */}
+      {(activeTab === 'ON_HOLD' || activeTab === 'ALL') && onHoldTasks.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 flex items-start gap-2 text-xs">
+          <Archive className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <span className="font-bold text-amber-300">타겟 서비스(PDF 뷰어) 기능 분리 보류 안내: </span>
+            <span className="text-[#C9D1D9] text-[11px]">
+              PDF 관련 기능은 타겟 서비스 전용 원격 레포(<code className="text-amber-400 font-mono">pdfowers-service</code>) 개설 시 이관 예정이며, 현재 AI 개발 플랫폼(<code className="text-indigo-400 font-mono">jkadh-typep</code>)에서는 동결·보류 상태로 관리됩니다. (/docs/pending_target_service_migration/ 참조)
+            </span>
+          </div>
+        </div>
+      )}
 
       {viewMode === 'BRANCH' ? (
         <div className="space-y-4">

@@ -31,8 +31,8 @@ export const ModelMetaRegistryView: React.FC<ModelMetaRegistryViewProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Header Info */}
-      <div className="p-4 rounded-xl bg-[#161B22] border border-[#30363D] flex flex-col md:flex-row md:items-center justify-between gap-3">
+      {/* Header Info (상하 열거 레이아웃) */}
+      <div className="p-4 rounded-xl bg-[#161B22] border border-[#30363D] space-y-3 shadow-xs">
         <div>
           <div className="flex items-center gap-1.5 text-blue-400 text-xs font-semibold uppercase tracking-wide">
             <Cpu className="w-3.5 h-3.5" />
@@ -45,9 +45,12 @@ export const ModelMetaRegistryView: React.FC<ModelMetaRegistryViewProps> = ({
             ChatGPT Codex, Claude 3.7, Gemini 3.7 Flash, Manus Operator의 강점 영역 및 오류/토큰 초과 시 대체 Fallback 체인 설정
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs">
+        <div className="pt-2 border-t border-[#30363D]/70 flex flex-wrap items-center gap-2 text-xs">
           <span className="px-2.5 py-1 rounded bg-[#0D1117] border border-[#30363D] text-[#8B949E] font-mono text-[11px]">
-            등록 모델: {models.length}개
+            등록 모델: <strong className="text-blue-400 font-bold">{models.length}</strong>개
+          </span>
+          <span className="px-2.5 py-1 rounded bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 font-mono text-[11px]">
+            Fallback 자동 라우팅 활성
           </span>
         </div>
       </div>

@@ -60,7 +60,7 @@ export const api = {
     return res.json();
   },
 
-  async updateModelFallback(id: string, payload: { fallbackOrder?: string[]; isAvailable?: boolean }) {
+  async updateModelFallback(id: string, payload: { fallbackOrder?: string[]; isAvailable?: boolean; badgeColor?: string }) {
     const res = await fetch(`/api/models/${id}/fallback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

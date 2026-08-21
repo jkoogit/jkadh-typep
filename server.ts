@@ -96,18 +96,32 @@ async function startServer() {
 
   // API 3: Team Members & Permissions
   app.get('/api/members', (req, res) => {
-    res.json({ success: true, data: members });
+    res.json({
+      success: true,
+      database: 'jkadhp_dev',
+      table: 'team_members',
+      fetchedAt: new Date().toISOString(),
+      count: members.length,
+      data: members
+    });
   });
 
   app.post('/api/members/:id/permissions', (req, res) => {
     const { id } = req.params;
-    const { role, allowedModels, dailyTokenLimit, status } = req.body;
+    const { role, roles, projectRoles, allowedModels, dailyTokenLimit, status, avatar, isTokenAutoSynced } = req.body;
     const idx = members.findIndex((m) => m.id === id);
     if (idx !== -1) {
       if (role) members[idx].role = role;
+      if (roles) {
+        members[idx].roles = roles;
+        if (roles.length > 0) members[idx].role = roles[0];
+      }
+      if (projectRoles) members[idx].projectRoles = projectRoles;
       if (allowedModels) members[idx].allowedModels = allowedModels;
       if (dailyTokenLimit !== undefined) members[idx].dailyTokenLimit = Number(dailyTokenLimit);
       if (status) members[idx].status = status;
+      if (avatar) members[idx].avatar = avatar;
+      if (isTokenAutoSynced !== undefined) members[idx].isTokenAutoSynced = Boolean(isTokenAutoSynced);
       res.json({ success: true, data: members[idx] });
     } else {
       res.status(404).json({ success: false, message: 'Member not found' });
@@ -121,11 +135,12 @@ async function startServer() {
 
   app.post('/api/models/:id/fallback', (req, res) => {
     const { id } = req.params;
-    const { fallbackOrder, isAvailable } = req.body;
+    const { fallbackOrder, isAvailable, badgeColor } = req.body;
     const idx = models.findIndex((m) => m.id === id);
     if (idx !== -1) {
       if (fallbackOrder) models[idx].fallbackOrder = fallbackOrder;
       if (isAvailable !== undefined) models[idx].isAvailable = isAvailable;
+      if (badgeColor) models[idx].badgeColor = badgeColor;
       res.json({ success: true, data: models[idx] });
     } else {
       res.status(404).json({ success: false, message: 'Model not found' });
@@ -201,30 +216,30 @@ async function startServer() {
   // API 5.2: Harness Session Governance API (PostgreSQL Live State Management)
   // ---------------------------------------------------------------------------
   let activeSessionState: any = {
-    id: 'ses_20260818_01',
-    session_code: 'SES-20260818-PDF-TABLE-05',
+    id: 'ses_20260820_08',
+    session_code: 'SES-20260820-08',
     user_id: 'usr_jkoogi_01',
     user_email: 'jkoogit@gmail.com',
     user_role: 'SUPER_ADMIN',
     target_database: 'jkadhp_dev',
-    active_task_id: 'node-table-extract',
-    active_task_code: 'PDF-TABLE-05',
-    active_phase_num: 7,
-    session_goal: '[PDF-TABLE-05] 비구조화 표 감지 및 Excel 변환 7단계 라이프사이클 하네스 완료 및 PostgreSQL jkadhp_dev 동기화',
+    active_task_id: 'node-plat-cli',
+    active_task_code: 'PLAT-CLI-07',
+    active_phase_num: 1,
+    session_goal: '[05] 하네스 6대 라이프사이클 통합 CLI 도구 및 자동화 스크립트 구축 (PLAT-CLI-07)',
     status: 'ACTIVE',
     started_at: new Date().toISOString(),
     last_heartbeat_at: new Date().toISOString(),
     heartbeat_interval_sec: 30,
     is_recovered: false,
-    tokens_consumed: 384500,
-    cost_usd: 1.6240,
-    execution_count: 21,
-    savepoint_name: 'sp_pdf_table_05_p7_done',
-    next_handoff_brief: '[PDF-FORM-07] 대화형 PDF 폼 필드 자동 인식 및 서명 (Phase 1 착수) / [PDF-CRYPTO-03] PII 마스킹 (Phase 3 기획)',
+    tokens_consumed: 0,
+    cost_usd: 0,
+    execution_count: 0,
+    savepoint_name: 'sp_plat_cli_07_p1_init',
+    next_handoff_brief: '하네스 6대 라이프사이클 통합 CLI 스크립트(scripts/harnessCli.cjs) 구축 및 GitHub API 연동 자동화',
     git_branch: 'dev',
     git_commit_hash: 'c83d91f',
-    release_tag: 'v1.5.0',
-    report_doc_path: '/docs/report/03-2026-08-18-세션종료-회고-보고서.md',
+    release_tag: 'v2.0.0',
+    report_doc_path: '/docs/report/07-2026-08-19-세션종료-회고-보고서.md',
     reg_sys_cd: 'JKADH_HARNESS',
     reg_user_id: 'jkoogi',
     reg_dt: new Date().toISOString(),
@@ -1080,21 +1095,26 @@ Always provide concrete TypeScript interfaces, 3 scenarios (Normal, Error, Excep
     team_members: {
       group: 'CORE_OPS',
       groupLabel: 'AI 계정 풀 및 운영',
-      description: 'RBAC Team Members, Token Limits and Model Whitelists',
+      description: 'RBAC Team Members, Project Roles, and Model Whitelists',
       version: 'v2.2.0',
       statements: [
         `CREATE TABLE IF NOT EXISTS team_members (
           id VARCHAR(64) PRIMARY KEY,
           name VARCHAR(64) NOT NULL,
           email VARCHAR(128) NOT NULL,
+          avatar TEXT,
           role VARCHAR(32) NOT NULL,
+          roles JSONB DEFAULT '[]'::jsonb,
+          project_roles JSONB DEFAULT '{}'::jsonb,
           allowed_models JSONB DEFAULT '[]'::jsonb,
           daily_token_limit BIGINT DEFAULT 1000000,
           tokens_used_today BIGINT DEFAULT 0,
           monthly_budget_usd NUMERIC(10,2) DEFAULT 100.00,
           cost_used_usd NUMERIC(10,2) DEFAULT 0.00,
+          is_token_auto_synced BOOLEAN DEFAULT false,
           status VARCHAR(32) DEFAULT 'ACTIVE',
           department VARCHAR(64),
+          last_active VARCHAR(32) DEFAULT '1분 전',
           reg_sys_cd VARCHAR(32) DEFAULT 'JKADH_DEV',
           reg_user_id VARCHAR(64) DEFAULT 'jkoogi',
           reg_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1102,17 +1122,37 @@ Always provide concrete TypeScript interfaces, 3 scenarios (Normal, Error, Excep
           mod_user_id VARCHAR(64) DEFAULT 'jkoogi',
           mod_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );`,
+        `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS avatar TEXT;`,
+        `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS roles JSONB DEFAULT '[]'::jsonb;`,
+        `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS project_roles JSONB DEFAULT '{}'::jsonb;`,
+        `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS is_token_auto_synced BOOLEAN DEFAULT false;`,
+        `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS last_active VARCHAR(32) DEFAULT '1분 전';`,
         `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS reg_sys_cd VARCHAR(32) DEFAULT 'JKADH_DEV';`,
         `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS reg_user_id VARCHAR(64) DEFAULT 'jkoogi';`,
         `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS mod_sys_cd VARCHAR(32) DEFAULT 'JKADH_DEV';`,
         `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS mod_user_id VARCHAR(64) DEFAULT 'jkoogi';`,
-        `COMMENT ON TABLE team_members IS 'jkadh_schema_v2.2.0: RBAC Team Members and Model Whitelists';`,
-        `INSERT INTO team_members (id, name, email, role, daily_token_limit, tokens_used_today, monthly_budget_usd, status, department)
+        `COMMENT ON TABLE team_members IS 'jkadh_schema_v2.2.0: RBAC Team Members, Project-Scoped Roles and Model Whitelists (3 Records Baseline)';`,
+        `INSERT INTO team_members (id, name, email, avatar, role, roles, project_roles, allowed_models, daily_token_limit, tokens_used_today, monthly_budget_usd, cost_used_usd, is_token_auto_synced, status, department, last_active)
          VALUES
-           ('tm_01', '구자흠 (JKoo)', 'jkoogi@gmail.com', 'SUPER_ADMIN', 10000000, 420000, 500.00, 'ACTIVE', 'Platform Architecture'),
-           ('tm_02', '김민지', 'minji.kim@company.com', 'AI_ENGINEER', 2000000, 350000, 150.00, 'ACTIVE', 'AI Core Dev'),
-           ('tm_03', '이대원', 'daewon.lee@company.com', 'GATEKEEPER', 1500000, 120000, 100.00, 'ACTIVE', 'QA & Governance')
-         ON CONFLICT (id) DO NOTHING;`,
+           ('mem-jkoo', '조정국 (Lead Architect / Super Admin)', 'jkoogit@gmail.com', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80', 'SUPER_ADMIN', '["SUPER_ADMIN", "ARCHITECT"]'::jsonb, '{"proj-all": ["SUPER_ADMIN", "ARCHITECT"], "proj-pdfowers": ["SUPER_ADMIN", "ARCHITECT"], "proj-jkadh": ["SUPER_ADMIN", "ARCHITECT"], "proj-security": ["SUPER_ADMIN", "AUDITOR"]}'::jsonb, '["claude-3-7-sonnet", "gpt-4o-codex", "gemini-3-7-flash", "manus-operator"]'::jsonb, 5000000, 485000, 500.00, 62.40, true, 'ACTIVE', 'Platform Architecture Lab', '1분 전'),
+           ('mem-minji', '김민지 (Core Engineer)', 'minji.kim@team.io', 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&auto=format&fit=crop&q=80', 'ENGINEER', '["ENGINEER"]'::jsonb, '{"proj-all": ["ENGINEER"], "proj-pdfowers": ["ENGINEER", "ARCHITECT"], "proj-jkadh": ["ENGINEER"], "proj-security": ["REVIEWER"]}'::jsonb, '["gpt-4o-codex", "gemini-3-7-flash"]'::jsonb, 1000000, 820000, 150.00, 88.00, false, 'ACTIVE', 'PDFowers Service Team', '8분 전'),
+           ('mem-daewon', '이대원 (Security & Auditor)', 'daewon.lee@team.io', 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80', 'AUDITOR', '["AUDITOR"]'::jsonb, '{"proj-all": ["AUDITOR"], "proj-pdfowers": ["AUDITOR"], "proj-jkadh": ["REVIEWER"], "proj-security": ["AUDITOR", "ADMIN"]}'::jsonb, '["gemini-3-7-flash", "claude-3-7-sonnet"]'::jsonb, 500000, 45000, 50.00, 4.20, false, 'ACTIVE', 'Security & Compliance', '2시간 전')
+         ON CONFLICT (id) DO UPDATE SET
+           name = EXCLUDED.name,
+           email = EXCLUDED.email,
+           avatar = EXCLUDED.avatar,
+           role = EXCLUDED.role,
+           roles = EXCLUDED.roles,
+           project_roles = EXCLUDED.project_roles,
+           allowed_models = EXCLUDED.allowed_models,
+           daily_token_limit = EXCLUDED.daily_token_limit,
+           tokens_used_today = EXCLUDED.tokens_used_today,
+           monthly_budget_usd = EXCLUDED.monthly_budget_usd,
+           cost_used_usd = EXCLUDED.cost_used_usd,
+           is_token_auto_synced = EXCLUDED.is_token_auto_synced,
+           status = EXCLUDED.status,
+           department = EXCLUDED.department,
+           last_active = EXCLUDED.last_active;`,
       ],
     },
     harness_sessions: {
@@ -1617,6 +1657,41 @@ Always provide concrete TypeScript interfaces, 3 scenarios (Normal, Error, Excep
           spec_score: t.specValidationScore,
         })),
         executionTimeMs: 3.8,
+      });
+    }
+
+    if (lower.includes('select') && lower.includes('team_members')) {
+      return res.json({
+        success: true,
+        isRemote: false,
+        database: targetDb,
+        rowCount: members.length,
+        columns: ['id', 'name', 'email', 'avatar', 'role', 'roles', 'project_roles', 'allowed_models', 'daily_token_limit', 'tokens_used_today', 'monthly_budget_usd', 'cost_used_usd', 'is_token_auto_synced', 'status', 'department', 'last_active', 'reg_sys_cd', 'reg_user_id', 'reg_dt', 'mod_sys_cd', 'mod_user_id', 'mod_dt'],
+        rows: members.map((m) => ({
+          id: m.id,
+          name: m.name,
+          email: m.email,
+          avatar: m.avatar,
+          role: m.role,
+          roles: m.roles || [m.role],
+          project_roles: m.projectRoles || { 'proj-all': [m.role] },
+          allowed_models: m.allowedModels,
+          daily_token_limit: m.dailyTokenLimit,
+          tokens_used_today: m.tokensUsedToday,
+          monthly_budget_usd: m.monthlyBudgetUSD,
+          cost_used_usd: m.costUsedUSD,
+          is_token_auto_synced: m.isTokenAutoSynced ?? false,
+          status: m.status,
+          department: m.department,
+          last_active: m.lastActive,
+          reg_sys_cd: 'JKADH_DEV',
+          reg_user_id: 'SYSTEM',
+          reg_dt: '2026-08-20 00:00:00',
+          mod_sys_cd: 'JKADH_DEV',
+          mod_user_id: 'mem-jkoo',
+          mod_dt: '2026-08-21 09:30:00',
+        })),
+        executionTimeMs: 3.5,
       });
     }
 

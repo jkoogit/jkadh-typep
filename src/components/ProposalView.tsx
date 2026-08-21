@@ -27,33 +27,32 @@ export const ProposalView: React.FC<ProposalViewProps> = ({ proposals, onSelectT
 
   return (
     <div className="space-y-4">
-      {/* Top Banner: Vibe Coding Readiness & Scope Analysis */}
-      <div className="rounded-xl bg-[#161B22] border border-[#30363D] p-5 shadow-sm relative overflow-hidden">
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-          <div className="space-y-1.5 max-w-3xl">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-semibold">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>JKADH 바이브코딩 명세 구체화 & 사례 기반 아키텍처 제안</span>
-            </div>
-            <h2 className="text-xl font-bold text-[#E6EDF3] tracking-tight">
-              대상 작업 정밀 분석 및 단계별 검증 절차 체계화
-            </h2>
-            <p className="text-xs text-[#7D8590] leading-relaxed">
-              요청하신 <strong className="text-[#E6EDF3]">AI 개발 플랫폼(팀 계정 관리, RBAC 권한, 사용량 대시보드, 다중 모델 Fallback)</strong>과
-              샘플 타겟인 <strong className="text-[#E6EDF3]">PDFowers</strong>에 대해, 
-              바이브코딩의 모호성을 제거하고 7단계 라이프사이클의 완료 조건을 프로그램 로직으로 강제할 수 있도록 분석한 제안서입니다.
-            </p>
+      {/* Top Banner: Vibe Coding Readiness & Scope Analysis (상하 열거 레이아웃) */}
+      <div className="rounded-xl bg-[#161B22] border border-[#30363D] p-5 shadow-xs relative overflow-hidden space-y-4">
+        <div className="space-y-1.5 max-w-4xl">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-semibold">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>JKADH 바이브코딩 명세 구체화 & 사례 기반 아키텍처 제안</span>
           </div>
+          <h2 className="text-xl font-bold text-[#E6EDF3] tracking-tight">
+            대상 작업 정밀 분석 및 단계별 검증 절차 체계화
+          </h2>
+          <p className="text-xs text-[#7D8590] leading-relaxed">
+            요청하신 <strong className="text-[#E6EDF3]">AI 개발 플랫폼(팀 계정 관리, RBAC 권한, 사용량 대시보드, 다중 모델 Fallback)</strong>과
+            샘플 타겟인 <strong className="text-[#E6EDF3]">PDFowers</strong>에 대해, 
+            바이브코딩의 모호성을 제거하고 7단계 라이프사이클의 완료 조건을 프로그램 로직으로 강제할 수 있도록 분석한 제안서입니다.
+          </p>
+        </div>
 
-          <div className="flex flex-col sm:flex-row gap-2.5">
-            <div className="px-3.5 py-2 rounded-lg bg-[#0D1117] border border-[#30363D] text-center min-w-[120px]">
-              <span className="text-[10px] text-[#7D8590] block font-medium">명세 완성도</span>
-              <span className="text-lg font-bold text-emerald-400 font-mono">98.5%</span>
-            </div>
-            <div className="px-3.5 py-2 rounded-lg bg-[#0D1117] border border-[#30363D] text-center min-w-[120px]">
-              <span className="text-[10px] text-[#7D8590] block font-medium">검증 통제 룰셋</span>
-              <span className="text-lg font-bold text-blue-400 font-mono">14개 Gate</span>
-            </div>
+        {/* Metrics Bar (하단 배치) */}
+        <div className="pt-3 border-t border-[#30363D]/70 flex flex-wrap gap-2.5">
+          <div className="px-3.5 py-1.5 rounded-lg bg-[#0D1117] border border-[#30363D] flex items-center gap-2.5 min-w-[140px]">
+            <span className="text-[11px] text-[#7D8590] font-medium">명세 완성도:</span>
+            <span className="text-base font-bold text-emerald-400 font-mono">98.5%</span>
+          </div>
+          <div className="px-3.5 py-1.5 rounded-lg bg-[#0D1117] border border-[#30363D] flex items-center gap-2.5 min-w-[140px]">
+            <span className="text-[11px] text-[#7D8590] font-medium">검증 통제 룰셋:</span>
+            <span className="text-base font-bold text-blue-400 font-mono">14개 Gate</span>
           </div>
         </div>
       </div>

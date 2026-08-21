@@ -134,12 +134,21 @@ export interface TaskExecutionLoop extends AuditMetadata {
   diffSummary?: string;
 }
 
+export interface ProjectScope {
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+}
+
 export interface TeamMember {
   id: string;
   name: string;
   email: string;
   avatar: string;
   role: MemberRole;
+  roles?: MemberRole[];
+  projectRoles?: Record<string, MemberRole[]>; // Target project-scoped roles: { 'proj-pdfowers': ['ENGINEER'], 'proj-jkadh': ['SUPER_ADMIN', 'ARCHITECT'] }
   allowedModels: string[];
   dailyTokenLimit: number;
   tokensUsedToday: number;
@@ -149,6 +158,7 @@ export interface TeamMember {
   department: string;
   lastActive: string;
   isSuperAdmin?: boolean;
+  isTokenAutoSynced?: boolean;
 }
 
 export interface AIAccount {
@@ -188,6 +198,7 @@ export interface ModelMeta {
   tokenEstimationDifficulty: 'EXACT' | 'APPROXIMATE' | 'HEURISTIC';
   description: string;
   isAvailable: boolean;
+  badgeColor?: string; // Custom badge distinction color e.g. '#f59e0b', '#10b981', '#0ea5e9'
 }
 
 export type PhaseStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'SPEC_VERIFIED' | 'COMPLETED' | 'FAILED' | 'BLOCKED';
@@ -241,10 +252,10 @@ export interface TaskGraphNode {
   id: string;
   code: string;
   title: string;
-  module: 'OCR' | 'CONVERT' | 'SECURITY' | 'TABLE_EXTRACT' | 'WATERMARK' | 'MERGE_SPLIT';
+  module: 'GOVERNANCE' | 'MODEL_ROUTER' | 'SECURITY_VAULT' | 'DB_MIGRATION' | 'ORCHESTRATOR' | 'VIBE_RUNNER' | 'OCR' | 'CONVERT' | 'SECURITY' | 'TABLE_EXTRACT' | 'WATERMARK' | 'MERGE_SPLIT';
   complexity: 'LOW' | 'MEDIUM' | 'HIGH';
   estimatedTokens: number;
-  status: 'BACKLOG' | 'ANALYSIS' | 'PLANNED' | 'DEVELOPING' | 'TESTED' | 'DONE';
+  status: 'BACKLOG' | 'ANALYSIS' | 'PLANNED' | 'DEVELOPING' | 'IN_PROGRESS' | 'TESTED' | 'DONE' | 'ON_HOLD';
   dependencies: string[]; // node IDs
   assignedTo?: string; // Member ID
   currentPhase: number; // 1 to 7
@@ -264,6 +275,9 @@ export interface TaskGraphNode {
   addedAt?: string; // 추가 시점 (e.g. '2026-08-15 11:45 (Phase 7 검토 중 발굴)')
   addedReason?: string; // 추가 배경 및 사유
   targetMilestone?: string; // 목표 릴리즈 마일스톤
+  targetRepo?: 'jkadh-typep' | 'pdfowers-service' | string;
+  migrationStatus?: 'PENDING_MIGRATION' | 'MIGRATED' | 'NOT_APPLICABLE';
+  migrationTargetRepo?: string;
 }
 
 export interface DocumentationSection {
@@ -316,4 +330,42 @@ export interface ArchitecturalProposalCase {
   benefit: string;
   riskMitigation: string;
   specRuleLogic: string;
+}
+
+// ----------------------------------------------------
+// Global Audit Trail & JSON Audit Types (PLAT-AUDIT-10)
+// ----------------------------------------------------
+export type AuditCategory = 'SECURITY_VAULT' | 'AI_ROUTING' | 'SCHEMA_MIGRATION' | 'HARNESS_LIFECYCLE' | 'TEAM_RBAC' | 'DATA_RECORD';
+export type AuditSeverity = 'INFO' | 'WARNING' | 'CRITICAL' | 'SUCCESS';
+export type AuditActionType = 'CREATE' | 'UPDATE' | 'DELETE' | 'EXECUTE' | 'ROTATE_KEY' | 'PROMOTE' | 'FALLBACK';
+
+export interface AuditTrailRecord {
+  audit_id: string;
+  category: AuditCategory;
+  action_type: AuditActionType;
+  severity: AuditSeverity;
+  event_name: string;
+  summary: string;
+  target_resource: string;
+  ip_address: string;
+  user_agent?: string;
+  session_id?: string;
+  
+  // 6 Standard Audit Columns
+  reg_sys_cd: string;
+  reg_user_id: string;
+  reg_dt: string;
+  mod_sys_cd: string;
+  mod_user_id: string;
+  mod_dt: string;
+
+  // JSON Diff Payload
+  before_state?: Record<string, any> | null;
+  after_state?: Record<string, any> | null;
+  diff_summary?: {
+    added_keys: string[];
+    removed_keys: string[];
+    modified_keys: string[];
+  };
+  metadata?: Record<string, any>;
 }

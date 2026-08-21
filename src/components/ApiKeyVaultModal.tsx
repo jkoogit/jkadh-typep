@@ -1,259 +1,268 @@
 import React, { useState } from 'react';
 import {
   Key,
-  Shield,
   Plus,
+  Shield,
   Trash2,
   Eye,
   EyeOff,
   Copy,
   Check,
-  AlertTriangle,
+  Zap,
   Lock,
-  Share2,
-  RefreshCw,
+  X,
+  AlertCircle
 } from 'lucide-react';
-import { UserApiVaultItem } from '../types';
+import { MemberRole, UserApiVaultItem } from '../types';
 
 interface ApiKeyVaultModalProps {
   isOpen: boolean;
   onClose: () => void;
-  vaultItems: UserApiVaultItem[];
-  onAddKey: (item: Omit<UserApiVaultItem, 'id' | 'reg_sys_cd' | 'reg_user_id' | 'reg_dt' | 'mod_sys_cd' | 'mod_user_id' | 'mod_dt'> & { rawKey: string }) => void;
-  onDeleteKey: (id: string) => void;
-  currentUserId: string;
+  userId?: string;
+  userName?: string;
+  userRole?: MemberRole;
 }
 
 export const ApiKeyVaultModal: React.FC<ApiKeyVaultModalProps> = ({
   isOpen,
   onClose,
-  vaultItems,
-  onAddKey,
-  onDeleteKey,
-  currentUserId,
+  userId = 'usr_jkoogi_01',
+  userName = '조정국 (SUPER_ADMIN)',
+  userRole = 'SUPER_ADMIN',
 }) => {
-  const [provider, setProvider] = useState<'OPENAI' | 'ANTHROPIC' | 'GOOGLE' | 'MANUS' | 'CUSTOM'>('ANTHROPIC');
-  const [keyAlias, setKeyAlias] = useState('');
+  const [keys, setKeys] = useState<UserApiVaultItem[]>([
+    {
+      id: 'vlt_01',
+      userId: userId,
+      provider: 'OPENAI',
+      keyAlias: '개인 개발용 GPT-4o Key',
+      maskedKey: 'sk-proj-**********************98Ac',
+      isTeamShared: false,
+      dailyQuotaLimit: 1000000,
+      usedTokens: 145000,
+      status: 'ACTIVE',
+      reg_sys_cd: 'JKADH_CORE',
+      reg_user_id: 'usr_jkoogi_01',
+      reg_dt: '2026-08-18 10:00:00',
+      mod_sys_cd: 'JKADH_CORE',
+      mod_user_id: 'usr_jkoogi_01',
+      mod_dt: '2026-08-18 10:00:00',
+    },
+    {
+      id: 'vlt_02',
+      userId: userId,
+      provider: 'ANTHROPIC',
+      keyAlias: 'Claude 3.7 Thinking 전용 Key',
+      maskedKey: 'sk-ant-api03-******************B391',
+      isTeamShared: true,
+      dailyQuotaLimit: 2000000,
+      usedTokens: 620000,
+      status: 'ACTIVE',
+      reg_sys_cd: 'JKADH_CORE',
+      reg_user_id: 'usr_jkoogi_01',
+      reg_dt: '2026-08-19 14:30:00',
+      mod_sys_cd: 'JKADH_CORE',
+      mod_user_id: 'usr_jkoogi_01',
+      mod_dt: '2026-08-19 14:30:00',
+    }
+  ]);
+
+  const [provider, setProvider] = useState<'OPENAI' | 'ANTHROPIC' | 'GOOGLE' | 'MANUS' | 'CUSTOM'>('GOOGLE');
+  const [alias, setAlias] = useState('');
   const [rawKey, setRawKey] = useState('');
-  const [isTeamShared, setIsTeamShared] = useState(false);
-  const [dailyQuotaLimit, setDailyQuotaLimit] = useState(1000000);
+  const [isShared, setIsShared] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleAddKey = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!keyAlias.trim() || !rawKey.trim()) return;
+    if (!rawKey.trim() || !alias.trim()) return;
 
-    // Mask key
-    const prefix = rawKey.substring(0, 7);
-    const suffix = rawKey.substring(rawKey.length - 4);
-    const maskedKey = `${prefix}...${suffix}`;
+    const masked = rawKey.length > 8 ? `${rawKey.slice(0, 7)}****************${rawKey.slice(-4)}` : '********';
 
-    onAddKey({
-      userId: currentUserId,
+    const newKeyItem: UserApiVaultItem = {
+      id: `vlt_${Date.now()}`,
+      userId,
       provider,
-      keyAlias,
-      maskedKey,
-      rawKey,
-      isTeamShared,
-      dailyQuotaLimit,
+      keyAlias: alias.trim(),
+      maskedKey: masked,
+      isTeamShared: isShared,
+      dailyQuotaLimit: 1000000,
       usedTokens: 0,
       status: 'ACTIVE',
-    });
+      reg_sys_cd: 'JKADH_CORE',
+      reg_user_id: userId,
+      reg_dt: new Date().toISOString(),
+      mod_sys_cd: 'JKADH_CORE',
+      mod_user_id: userId,
+      mod_dt: new Date().toISOString(),
+    };
 
-    setKeyAlias('');
+    setKeys([...keys, newKeyItem]);
+    setAlias('');
     setRawKey('');
   };
 
+  const handleDeleteKey = (id: string) => {
+    setKeys(keys.filter(k => k.id !== id));
+  };
+
   const handleCopy = (id: string, text: string) => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard?.writeText(text);
     setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+    setTimeout(() => setCopiedId(null), 1500);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-[#161B22] border border-[#30363D] rounded-xl max-w-3xl w-full p-6 text-[#E6EDF3] shadow-2xl space-y-6 animate-in fade-in zoom-in-95 duration-150">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#30363D] pb-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-2xl w-full p-6 text-slate-900 dark:text-slate-100 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
+        
+        {/* Modal Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-400">
-              <Lock className="w-5 h-5" />
+            <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/60 border border-purple-100 dark:border-purple-800 text-purple-600 dark:text-purple-400">
+              <Key className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-[#E6EDF3] flex items-center gap-2">
-                개인 및 팀 AI API Key Vault
-                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-mono">
-                  AES-256-GCM
-                </span>
+              <h2 className="text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                개인 API Key Vault & 암호화 저장소
               </h2>
-              <p className="text-xs text-[#7D8590]">
-                모든 시크릿 키는 클라우드 저장 전 AES-256-GCM 알고리즘으로 하드닝 암호화되며, 인가된 작업 세션에만 복호화되어 주입됩니다.
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                작업자: {userName} ({userRole}) • 클라이언트 사이드 암호화 보관
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="text-[#7D8590] hover:text-[#E6EDF3] p-1.5 rounded-md hover:bg-[#21262D] cursor-pointer"
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
-            ✕
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Register New Key Form */}
-        <form onSubmit={handleSubmit} className="bg-[#0D1117] border border-[#30363D] rounded-lg p-4 space-y-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
-            <Plus className="w-4 h-4" /> 신규 AI API Key 보안 등록
+        {/* List of Registered API Keys */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300">
+            등록된 API Key 목록 ({keys.length}개)
           </h3>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="space-y-2">
+            {keys.map((k) => (
+              <div
+                key={k.id}
+                className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-900 dark:text-slate-100">{k.keyAlias}</span>
+                    <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-mono text-[10px]">
+                      {k.provider}
+                    </span>
+                    {k.isTeamShared && (
+                      <span className="px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 text-[10px]">
+                        팀 공유됨
+                      </span>
+                    )}
+                  </div>
+                  <div className="font-mono text-slate-500 dark:text-slate-400 text-[11px]">
+                    {k.maskedKey}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(k.id, k.maskedKey)}
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                    title="Key 복사"
+                  >
+                    {copiedId === k.id ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteKey(k.id)}
+                    className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                    title="Key 삭제"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Add New Key Form */}
+        <form onSubmit={handleAddKey} className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 space-y-3">
+          <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+            <Plus className="w-3.5 h-3.5 text-blue-500" />
+            신규 API Key 안전 등록
+          </h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-medium text-[#7D8590] mb-1">AI Provider</label>
+              <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">AI 공급자</label>
               <select
                 value={provider}
                 onChange={(e) => setProvider(e.target.value as any)}
-                className="w-full bg-[#161B22] border border-[#30363D] rounded-md px-3 py-1.5 text-xs text-[#E6EDF3] focus:outline-none focus:border-blue-500"
+                className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100"
               >
-                <option value="ANTHROPIC">Anthropic (Claude 3.7)</option>
-                <option value="OPENAI">OpenAI (Codex / GPT-4o)</option>
-                <option value="GOOGLE">Google (Gemini 3.7)</option>
-                <option value="MANUS">Manus Autonomous</option>
+                <option value="GOOGLE">Google Gemini (Gemini 3.7 Flash)</option>
+                <option value="OPENAI">OpenAI (ChatGPT Codex / o3-mini)</option>
+                <option value="ANTHROPIC">Anthropic (Claude 3.7 Sonnet)</option>
+                <option value="MANUS">Manus Operator Cluster</option>
                 <option value="CUSTOM">Custom Provider</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-[11px] font-medium text-[#7D8590] mb-1">키 별칭 (Alias)</label>
+              <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">키 별칭 / 용도</label>
               <input
                 type="text"
-                value={keyAlias}
-                onChange={(e) => setKeyAlias(e.target.value)}
-                placeholder="예: Claude Sonnet Prod-01"
-                className="w-full bg-[#161B22] border border-[#30363D] rounded-md px-3 py-1.5 text-xs text-[#E6EDF3] placeholder-[#7D8590] focus:outline-none focus:border-blue-500"
+                value={alias}
+                onChange={(e) => setAlias(e.target.value)}
+                placeholder="예: Gemini 3.7 Flash 개인 키"
+                className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100"
                 required
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-medium text-[#7D8590] mb-1">일일 토큰 한도 (Quota)</label>
-              <input
-                type="number"
-                value={dailyQuotaLimit}
-                onChange={(e) => setDailyQuotaLimit(Number(e.target.value))}
-                className="w-full bg-[#161B22] border border-[#30363D] rounded-md px-3 py-1.5 text-xs text-[#E6EDF3] focus:outline-none focus:border-blue-500"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-[11px] font-medium text-[#7D8590] mb-1">
-              API Key 시크릿 문자열 (입력 즉시 클라이언트 메모리에서 마스킹 및 암호화)
-            </label>
+            <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">API Key 값 (Secret)</label>
             <input
               type="password"
               value={rawKey}
               onChange={(e) => setRawKey(e.target.value)}
-              placeholder="sk-ant-api03-... 또는 sk-proj-..."
-              className="w-full bg-[#161B22] border border-[#30363D] rounded-md px-3 py-1.5 text-xs text-[#E6EDF3] font-mono placeholder-[#7D8590] focus:outline-none focus:border-blue-500"
+              placeholder="sk-... 또는 AIzaSy..."
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 font-mono"
               required
             />
           </div>
 
           <div className="flex items-center justify-between pt-1">
-            <label className="flex items-center gap-2 text-xs text-[#E6EDF3] cursor-pointer">
+            <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer">
               <input
                 type="checkbox"
-                checked={isTeamShared}
-                onChange={(e) => setIsTeamShared(e.target.checked)}
-                className="rounded bg-[#161B22] border-[#30363D] text-blue-600 focus:ring-0"
+                checked={isShared}
+                onChange={(e) => setIsShared(e.target.checked)}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
               />
-              <span className="flex items-center gap-1 text-[#7D8590]">
-                <Share2 className="w-3 h-3 text-purple-400" />
-                팀 전체 공용 풀(Fallback Pool)로 공유 허용
-              </span>
+              <span>팀원 공용 풀에 공유 (Team Shared Pool)</span>
             </label>
 
             <button
               type="submit"
-              className="px-4 py-1.5 rounded-md bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs shadow-sm transition border border-purple-500/40 flex items-center gap-1.5 cursor-pointer"
+              className="py-1.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs shadow-xs transition-colors flex items-center gap-1.5"
             >
-              <Lock className="w-3.5 h-3.5" />
-              <span>AES-256 Vault에 안전 저장</span>
+              <Plus className="w-3.5 h-3.5" />
+              <span>보관소에 안전 저장</span>
             </button>
           </div>
         </form>
 
-        {/* Existing Vault Keys List */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#7D8590]">
-              등록된 보안 Vault 키 목록 ({vaultItems.length})
-            </h3>
-            <span className="text-[11px] text-[#7D8590] flex items-center gap-1">
-              <Shield className="w-3 h-3 text-emerald-400" />
-              6대 감사 메타데이터 자동 추적 중
-            </span>
-          </div>
-
-          {vaultItems.length === 0 ? (
-            <div className="p-8 text-center bg-[#0D1117] border border-[#30363D] rounded-lg text-xs text-[#7D8590]">
-              등록된 API Key가 없습니다. 상단에서 개인 또는 팀용 키를 안전하게 등록하세요.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {vaultItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="bg-[#0D1117] border border-[#30363D] rounded-lg p-3.5 flex items-center justify-between gap-3 text-xs"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded bg-[#161B22] border border-[#30363D] font-mono text-[11px] font-bold text-blue-400">
-                      {item.provider}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-[#E6EDF3]">{item.keyAlias}</span>
-                        {item.isTeamShared && (
-                          <span className="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 text-[10px] border border-purple-500/30">
-                            Team Shared
-                          </span>
-                        )}
-                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px] border border-emerald-500/30">
-                          {item.status}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 font-mono text-[11px] text-[#7D8590] mt-0.5">
-                        <span>{item.maskedKey}</span>
-                        <span>•</span>
-                        <span>한도: {(item.dailyQuotaLimit / 1000).toFixed(0)}k</span>
-                        <span>•</span>
-                        <span>등록자: {item.reg_user_id}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleCopy(item.id, item.maskedKey)}
-                      className="p-1.5 rounded hover:bg-[#21262D] text-[#7D8590] hover:text-[#E6EDF3] transition cursor-pointer"
-                      title="마스킹 키 복사"
-                    >
-                      {copiedId === item.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                    </button>
-                    <button
-                      onClick={() => onDeleteKey(item.id)}
-                      className="p-1.5 rounded hover:bg-rose-500/20 text-[#7D8590] hover:text-rose-400 transition cursor-pointer"
-                      title="키 폐기 및 삭제"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
