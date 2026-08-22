@@ -3,46 +3,66 @@ import {
   Cpu,
   ShieldAlert,
   ArrowRight,
-  CheckCircle2,
-  Sliders,
-  DollarSign,
-  Zap,
+  Key,
+  Lock,
   Layers,
   Sparkles,
-  RefreshCw,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
-import { ModelMeta } from '../types';
+import { ModelMeta, UserApiVaultItem } from '../types';
 
 interface ModelMetaRegistryViewProps {
   models: ModelMeta[];
+  vaultKeys?: UserApiVaultItem[];
   onUpdateFallback: (id: string, fallbackOrder: string[]) => Promise<void>;
   onToggleAvailability: (id: string, isAvailable: boolean) => Promise<void>;
+  onBindVaultKey?: (modelId: string, vaultKey: UserApiVaultItem | null) => Promise<void>;
 }
 
 export const ModelMetaRegistryView: React.FC<ModelMetaRegistryViewProps> = ({
   models,
+  vaultKeys = [],
   onUpdateFallback,
   onToggleAvailability,
+  onBindVaultKey
 }) => {
   const [selectedModelId, setSelectedModelId] = useState<string>(models[0]?.id || 'claude-3-7-sonnet');
-  const [isSaving, setIsSaving] = useState(false);
+  const [isBinding, setIsBinding] = useState(false);
 
   const selectedModel = models.find((m) => m.id === selectedModelId) || models[0];
 
+  const handleKeySelect = async (keyId: string) => {
+    if (!onBindVaultKey) return;
+    setIsBinding(true);
+    try {
+      if (keyId === 'SYSTEM_ENV' || !keyId) {
+        await onBindVaultKey(selectedModel.id, null);
+      } else {
+        const found = vaultKeys.find((k) => k.id === keyId);
+        if (found) {
+          await onBindVaultKey(selectedModel.id, found);
+        }
+      }
+    } finally {
+      setIsBinding(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
-      {/* Header Info (상하 열거 레이아웃) */}
+      {/* Header Info */}
       <div className="p-4 rounded-xl bg-[#161B22] border border-[#30363D] space-y-3 shadow-xs">
         <div>
           <div className="flex items-center gap-1.5 text-blue-400 text-xs font-semibold uppercase tracking-wide">
             <Cpu className="w-3.5 h-3.5" />
-            <span>AI Model Meta-Information & Fallback Router</span>
+            <span>AI Model Meta-Information & API Key Vault Binding Matrix</span>
           </div>
           <h2 className="text-base font-bold text-[#E6EDF3] mt-0.5">
-            AI 모델 메타정보 관리 및 버전별 작업 용도 통제 매트릭스
+            AI 모델 메타정보 관리 및 보안금고 API Key 1-Click 인증 바인딩
           </h2>
           <p className="text-[11px] text-[#7D8590] mt-0.5">
-            ChatGPT Codex, Claude 3.7, Gemini 3.7 Flash, Manus Operator의 강점 영역 및 오류/토큰 초과 시 대체 Fallback 체인 설정
+            사용자가 등록한 AES-256-GCM 보안금고 키를 모델별로 1-Click 바인딩하고, Vibe Runner 각 공정(기획/아키텍트/개발/보안)이 자율 인증 주입 및 핫스왑을 수행합니다.
           </p>
         </div>
         <div className="pt-2 border-t border-[#30363D]/70 flex flex-wrap items-center gap-2 text-xs">
@@ -50,7 +70,10 @@ export const ModelMetaRegistryView: React.FC<ModelMetaRegistryViewProps> = ({
             등록 모델: <strong className="text-blue-400 font-bold">{models.length}</strong>개
           </span>
           <span className="px-2.5 py-1 rounded bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 font-mono text-[11px]">
-            Fallback 자동 라우팅 활성
+            보안금고 실시간 연동 활성
+          </span>
+          <span className="px-2.5 py-1 rounded bg-purple-950/40 border border-purple-500/30 text-purple-400 font-mono text-[11px]">
+            서킷 브레이커 Fallback 활성
           </span>
         </div>
       </div>
@@ -59,6 +82,7 @@ export const ModelMetaRegistryView: React.FC<ModelMetaRegistryViewProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2.5">
         {models.map((m) => {
           const isSelected = m.id === selectedModelId;
+          const isBound = m.authBindingStatus === 'BOUND' && m.vaultKeyMasked;
           return (
             <div
               key={m.id}
@@ -73,11 +97,22 @@ export const ModelMetaRegistryView: React.FC<ModelMetaRegistryViewProps> = ({
                 <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded bg-[#0D1117] text-blue-400 border border-[#30363D]">
                   {m.provider}
                 </span>
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    m.isAvailable ? 'bg-emerald-400' : 'bg-rose-500'
-                  }`}
-                />
+                <div className="flex items-center gap-1.5">
+                  {isBound ? (
+                    <span className="inline-flex items-center gap-0.5 text-[9px] font-mono text-emerald-400 bg-emerald-950/50 px-1.5 py-0.5 rounded border border-emerald-500/30" title="API Key Vault 연동됨">
+                      <Lock className="w-2.5 h-2.5" /> Vault
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-0.5 text-[9px] font-mono text-slate-400 bg-slate-800/60 px-1.5 py-0.5 rounded border border-slate-700" title="시스템 환경변수 사용">
+                      Env
+                    </span>
+                  )}
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      m.isAvailable ? 'bg-emerald-400' : 'bg-rose-500'
+                    }`}
+                  />
+                </div>
               </div>
 
               <h4 className="font-bold text-xs text-[#E6EDF3] line-clamp-1 mb-0.5">{m.name}</h4>
@@ -85,8 +120,10 @@ export const ModelMetaRegistryView: React.FC<ModelMetaRegistryViewProps> = ({
 
               <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono pt-1.5 border-t border-[#30363D] text-[#8B949E]">
                 <div>
-                  <span className="text-[#7D8590] block">코딩 점수</span>
-                  <span className="font-bold text-emerald-400">{m.codeScore}/100</span>
+                  <span className="text-[#7D8590] block">인증 자격</span>
+                  <span className={`font-bold ${isBound ? 'text-emerald-400' : 'text-slate-400'}`}>
+                    {isBound ? m.vaultKeyMasked : 'SYSTEM_ENV'}
+                  </span>
                 </div>
                 <div>
                   <span className="text-[#7D8590] block">평균 지연</span>
@@ -106,7 +143,14 @@ export const ModelMetaRegistryView: React.FC<ModelMetaRegistryViewProps> = ({
               <span className="text-[10px] font-semibold text-blue-400 uppercase">
                 {selectedModel.provider} • Version {selectedModel.version}
               </span>
-              <h3 className="text-base font-bold text-[#E6EDF3] mt-0.5">{selectedModel.name}</h3>
+              <h3 className="text-base font-bold text-[#E6EDF3] mt-0.5 flex items-center gap-2">
+                {selectedModel.name}
+                {selectedModel.authBindingStatus === 'BOUND' && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-300 border border-emerald-500/40 font-mono font-normal">
+                    🔒 보안금고 연동 ({selectedModel.vaultKeyAlias || selectedModel.vaultKeyMasked})
+                  </span>
+                )}
+              </h3>
             </div>
 
             <div className="flex items-center gap-2">
@@ -120,6 +164,43 @@ export const ModelMetaRegistryView: React.FC<ModelMetaRegistryViewProps> = ({
               >
                 {selectedModel.isAvailable ? '운영 중 (AVAILABLE)' : '일시 중단 (OFFLINE)'}
               </button>
+            </div>
+          </div>
+
+          {/* 1-Click Vault Key Binding Control */}
+          <div className="p-3.5 rounded-lg bg-[#0D1117] border border-[#30363D] space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-[#E6EDF3]">
+                <Key className="w-4 h-4 text-amber-400" />
+                <span>보안금고 API Key 1-Click 인증 바인딩</span>
+              </div>
+              <span className="text-[10px] text-[#7D8590] font-mono">
+                현재: {selectedModel.authBindingStatus === 'BOUND' ? `연동됨 (${selectedModel.vaultKeyMasked})` : '시스템 환경변수 (SYSTEM_ENV)'}
+              </span>
+            </div>
+            <p className="text-[11px] text-[#7D8590]">
+              사용자가 등록한 개인/팀 보안금고 키를 선택하면, Vibe Runner 엔진이 에이전트 실행 시 해당 키로 실시간 인증을 위임합니다.
+            </p>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <select
+                aria-label="보안금고 API Key 바인딩 선택"
+                value={selectedModel.vaultKeyId || 'SYSTEM_ENV'}
+                onChange={(e) => handleKeySelect(e.target.value)}
+                disabled={isBinding}
+                className="bg-[#161B22] border border-[#30363D] text-[#E6EDF3] text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500 font-mono cursor-pointer"
+              >
+                <option value="SYSTEM_ENV">⚙️ 시스템 기본 환경변수 (SYSTEM_ENV)</option>
+                {vaultKeys.map((vk) => (
+                  <option key={vk.id} value={vk.id}>
+                    🔒 {vk.keyAlias} ({vk.provider} • {vk.maskedKey})
+                  </option>
+                ))}
+              </select>
+              {selectedModel.vaultKeyMasked && (
+                <span className="text-xs font-mono px-2 py-1 rounded bg-emerald-950/40 border border-emerald-500/30 text-emerald-300">
+                  FIPS 마스킹: {selectedModel.vaultKeyMasked}
+                </span>
+              )}
             </div>
           </div>
 
