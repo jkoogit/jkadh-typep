@@ -8,7 +8,7 @@ import { ModelMeta, TaskGraphNode } from '../types';
 
 export class VibeRunnerEngine {
   /**
-   * 단일 Phase 루프 실행 시뮬레이터 (AST 정적 검증 및 Multi-Model Fallback 포함)
+   * 단일 Phase 루프 실행 시뮬레이터 (AST 정적 검증, API Key Vault 인증 주입 및 Multi-Model Fallback 핫스왑 포함)
    */
   public static async executePhase(params: {
     task: TaskGraphNode;
@@ -25,6 +25,12 @@ export class VibeRunnerEngine {
 
     const isFallbackTriggered = !!forceFallback;
     const activeModelId = isFallbackTriggered ? fallbackModelId : assignedModelId;
+
+    // Retrieve model metadata and auth binding status
+    const targetModelMeta = models.find((m) => m.id === activeModelId);
+    const authBindingStatus = targetModelMeta?.authBindingStatus || 'SYSTEM_ENV';
+    const vaultKeyAlias = targetModelMeta?.vaultKeyAlias || undefined;
+    const vaultKeyMasked = targetModelMeta?.vaultKeyMasked || undefined;
 
     const startTime = Date.now();
 
@@ -112,10 +118,13 @@ describe('VibeRunner 3-Scenario Tests', () => {
       assignedModelId,
       activeModelId,
       isFallbackTriggered,
+      authBindingStatus,
+      vaultKeyAlias,
+      vaultKeyMasked,
       astReport,
       outputArtifact: {
         title: `[${task.code}] Phase ${phaseNumber} 산출물 (${loopAction})`,
-        description: `모델 [${activeModelId}]에 의해 ${durationMs}ms 동안 생성 및 AST 검증 완료`,
+        description: `모델 [${activeModelId}] (${authBindingStatus === 'BOUND' ? '🔒 Vault ' + (vaultKeyAlias || vaultKeyMasked) : '⚙️ System Env'})에 의해 ${durationMs}ms 동안 생성 및 AST 검증 완료`,
         generatedCodeSnippet: codeSnippet,
         testSummary: {
           happyPathPassed: true,
