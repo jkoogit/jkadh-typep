@@ -33,6 +33,9 @@ export interface VibePhaseExecutionResult {
   assignedModelId: string;
   activeModelId: string;
   isFallbackTriggered: boolean;
+  authBindingStatus?: 'BOUND' | 'UNBOUND' | 'SYSTEM_ENV';
+  vaultKeyAlias?: string;
+  vaultKeyMasked?: string;
   astReport: AstValidationReport;
   outputArtifact: {
     title: string;

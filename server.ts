@@ -135,16 +135,80 @@ async function startServer() {
 
   app.post('/api/models/:id/fallback', (req, res) => {
     const { id } = req.params;
-    const { fallbackOrder, isAvailable, badgeColor } = req.body;
+    const { fallbackOrder, isAvailable, badgeColor, vaultKeyId, vaultKeyAlias, vaultKeyMasked, authBindingStatus } = req.body;
     const idx = models.findIndex((m) => m.id === id);
     if (idx !== -1) {
       if (fallbackOrder) models[idx].fallbackOrder = fallbackOrder;
       if (isAvailable !== undefined) models[idx].isAvailable = isAvailable;
       if (badgeColor) models[idx].badgeColor = badgeColor;
+      if (vaultKeyId !== undefined) models[idx].vaultKeyId = vaultKeyId;
+      if (vaultKeyAlias !== undefined) models[idx].vaultKeyAlias = vaultKeyAlias;
+      if (vaultKeyMasked !== undefined) models[idx].vaultKeyMasked = vaultKeyMasked;
+      if (authBindingStatus !== undefined) models[idx].authBindingStatus = authBindingStatus;
       res.json({ success: true, data: models[idx] });
     } else {
       res.status(404).json({ success: false, message: 'Model not found' });
     }
+  });
+
+  // API 4.1: Real-time Platform Environment & API Key Diagnostics
+  app.get('/api/env/status', async (req, res) => {
+    const hasGithubToken = !!(process.env.GITHUB_TOKEN || process.env.GH_TOKEN);
+    const hasGeminiKey = !!process.env.GEMINI_API_KEY;
+    const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY;
+    const hasOpenAiKey = !!process.env.OPENAI_API_KEY;
+    const hasDeepSeekKey = !!process.env.DEEPSEEK_API_KEY;
+
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      allRequiredValid: hasGithubToken && hasGeminiKey,
+      items: [
+        {
+          key: 'GITHUB_TOKEN',
+          name: 'GitHub Personal Access Token',
+          required: true,
+          exists: hasGithubToken,
+          masked: hasGithubToken ? `${(process.env.GITHUB_TOKEN || process.env.GH_TOKEN)!.slice(0, 4)}***${(process.env.GITHUB_TOKEN || process.env.GH_TOKEN)!.slice(-4)}` : 'NOT_SET',
+          status: hasGithubToken ? 'ACTIVE' : 'MISSING',
+          user: 'jkoogit',
+          guide: 'AI Studio Settings (⚙️) ➔ Secrets ➔ GITHUB_TOKEN (repo, workflow)'
+        },
+        {
+          key: 'GEMINI_API_KEY',
+          name: 'Google Gemini API Key',
+          required: true,
+          exists: hasGeminiKey,
+          masked: hasGeminiKey ? `${process.env.GEMINI_API_KEY!.slice(0, 4)}***${process.env.GEMINI_API_KEY!.slice(-4)}` : 'NOT_SET',
+          status: hasGeminiKey ? 'ACTIVE' : 'MISSING',
+          guide: 'AI Studio Settings (⚙️) ➔ Secrets ➔ GEMINI_API_KEY'
+        },
+        {
+          key: 'ANTHROPIC_API_KEY',
+          name: 'Anthropic Claude API Key',
+          required: false,
+          exists: hasAnthropicKey,
+          masked: hasAnthropicKey ? `${process.env.ANTHROPIC_API_KEY!.slice(0, 4)}***` : 'NOT_SET',
+          status: hasAnthropicKey ? 'ACTIVE' : 'OPTIONAL'
+        },
+        {
+          key: 'OPENAI_API_KEY',
+          name: 'OpenAI GPT-4o API Key',
+          required: false,
+          exists: hasOpenAiKey,
+          masked: hasOpenAiKey ? `${process.env.OPENAI_API_KEY!.slice(0, 4)}***` : 'NOT_SET',
+          status: hasOpenAiKey ? 'ACTIVE' : 'OPTIONAL'
+        },
+        {
+          key: 'DEEPSEEK_API_KEY',
+          name: 'DeepSeek Reasoner API Key',
+          required: false,
+          exists: hasDeepSeekKey,
+          masked: hasDeepSeekKey ? `${process.env.DEEPSEEK_API_KEY!.slice(0, 4)}***` : 'NOT_SET',
+          status: hasDeepSeekKey ? 'ACTIVE' : 'OPTIONAL'
+        }
+      ]
+    });
   });
 
   // API 5: Task Graph & 7-Phase Vibe Coding Lifecycle
