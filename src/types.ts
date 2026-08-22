@@ -199,6 +199,10 @@ export interface ModelMeta {
   description: string;
   isAvailable: boolean;
   badgeColor?: string; // Custom badge distinction color e.g. '#f59e0b', '#10b981', '#0ea5e9'
+  vaultKeyId?: string; // ID of the AES-256 encrypted API key in UserApiVaultItem
+  vaultKeyAlias?: string; // User-friendly key alias (e.g. "Personal Claude Pro Key")
+  vaultKeyMasked?: string; // Masked key preview (e.g. "sk-***7F12")
+  authBindingStatus?: 'BOUND' | 'UNBOUND' | 'SYSTEM_ENV'; // Real-time auth credential binding status
 }
 
 export type PhaseStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'SPEC_VERIFIED' | 'COMPLETED' | 'FAILED' | 'BLOCKED';
