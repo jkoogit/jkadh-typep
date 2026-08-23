@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+/* Allow text selection across the entire application */
+*, *::before, *::after {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* ========================================================================= */
+/* Custom Dark Scrollbar Design for GitHub/Developer Theme */
+/* ========================================================================= */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0d1117;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: #58a6ff;
+}
+
+/* Firefox scrollbar support */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #30363d #0d1117;
+}
+
+/* Modal and container dark scrollbar helper class */
+.dark-custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.dark-custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(13, 17, 23, 0.6);
+  border-radius: 4px;
+}
+
+.dark-custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 4px;
+  border: 1px solid rgba(48, 54, 61, 0.4);
+}
+
+.dark-custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
+

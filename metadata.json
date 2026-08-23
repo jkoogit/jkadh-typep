@@ -1,0 +1,7 @@
+{
+  "name": "JKADH AI DevPlatform",
+  "description": "AI-driven development platform for PDFowers featuring shared team AI account governance, multi-model fallback orchestration, 7-phase Vibe Coding lifecycle, and jkadhp_dev PostgreSQL management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
