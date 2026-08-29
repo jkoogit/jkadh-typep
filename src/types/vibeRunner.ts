@@ -9,6 +9,49 @@ export type VibeLoopAction =
 
 export type VibePhaseStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'HEALING';
 
+export type SecOpsRuleCategory =
+  | 'SECRET_LEAK'
+  | 'SQL_INJECTION'
+  | 'AUDIT_COLUMNS_MISSING'
+  | 'DESTRUCTIVE_DDL'
+  | 'UNPROTECTED_ENDPOINT'
+  | 'DANGEROUS_EVAL';
+
+export interface SecOpsFinding {
+  id: string;
+  level: 1 | 2 | 3;
+  category: SecOpsRuleCategory;
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  ruleId: string;
+  description: string;
+  lineMatch?: string;
+  autoHealable: boolean;
+  healingStrategy?: string;
+}
+
+export interface FipsSecOpsReport {
+  isCompliant: boolean;
+  fipsScore: number;
+  level1SecretScanPassed: boolean;
+  level2InjectionScanPassed: boolean;
+  level3GovernancePassed: boolean;
+  findings: SecOpsFinding[];
+  sha256Signature: string;
+  evaluatedAt: string;
+  autoHealingApplied: boolean;
+  autoHealingDetails?: {
+    attemptCount: number;
+    fixedFindingsCount: number;
+    originalScore: number;
+    healedScore: number;
+    diffSummary: string[];
+    healedCodeSnippet: string;
+    originalCodeSnippet: string;
+  };
+  isBlocked: boolean;
+  blockReason?: string;
+}
+
 export interface AstValidationReport {
   isValid: boolean;
   syntaxErrors: string[];
@@ -20,6 +63,7 @@ export interface AstValidationReport {
   hasScenarioTests: boolean;
   complexityScore: number;
   warnings: string[];
+  secOpsReport?: FipsSecOpsReport;
 }
 
 export interface VibePhaseExecutionResult {

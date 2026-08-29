@@ -18,12 +18,18 @@ import {
   Activity,
   Award,
   ListChecks,
+  Lock,
+  Flame,
+  ShieldAlert,
+  Wrench,
 } from 'lucide-react';
 import { ModelMeta, TaskGraphNode } from '../types';
 import { VibeRunnerEngine } from '../services/VibeRunnerEngine';
 import { AstValidator } from '../services/AstValidator';
-import { VibePhaseExecutionResult } from '../types/vibeRunner';
+import { SecOpsEngine } from '../services/SecOpsEngine';
+import { VibePhaseExecutionResult, FipsSecOpsReport } from '../types/vibeRunner';
 import { runHarnessCliUnitTests, HarnessCliTestResult } from '../test/harnessCli.test';
+import { runSecOpsAutoHealingUnitTests, SecOpsTestScenarioResult } from '../test/secopsAutoHealing.test';
 
 interface VibeRunnerSandboxProps {
   tasks: TaskGraphNode[];
@@ -31,21 +37,74 @@ interface VibeRunnerSandboxProps {
   defaultTaskId?: string;
 }
 
+const SECOPS_PRESETS = {
+  CLEAN: `// [Happy Path] FIPS-140-3 3단계 보안 규정 및 6대 감사 컬럼 완비 클린 코드
+import { db } from '../db';
+
+export interface UserAccount {
+  id: string;
+  email: string;
+  created_at: string;
+  updated_at: string;
+  created_by: string;
+  updated_by: string;
+  is_deleted: boolean;
+  version: number;
+}
+
+export async function getUserById(userId: string): Promise<UserAccount | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const result = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
+  return result.rows[0] || null;
+}`,
+  SECRET_LEAK: `// [Error] Level 1: 하드코딩된 API Key 노출 결함
+export async function generateContent(prompt: string) {
+  const claudeKey = "sk-ant-api03-abcdef1234567890abcdef1234567890";
+  const geminiKey = "AIzaSyD1234567890AbcdefGhijklMnopQrstu";
+  return { claudeKey, geminiKey, prompt };
+}`,
+  SQLI_AND_AUDIT: `// [Error] Level 2 SQL Injection + Level 3 6대 감사 컬럼 누락
+export interface CustomerProfile {
+  id: string;
+  name: string;
+}
+
+export async function fetchCustomerData(customerId: string) {
+  const apiKey = "sk-ant-api03-abcdef1234567890abcdef1234567890";
+  const query = "SELECT * FROM users WHERE id = '" + customerId + "'";
+  return query;
+}`,
+  DESTRUCTIVE_ATTACK: `// [Edge Bounds] Level 3: 파괴적 DDL 쿼리 (즉시 실행 차단 및 롤백)
+export async function dangerousWipeData() {
+  const destructiveQuery = "DROP TABLE users CASCADE;";
+  return destructiveQuery;
+}`,
+};
+
 export const VibeRunnerSandbox: React.FC<VibeRunnerSandboxProps> = ({
   tasks,
   models,
   defaultTaskId,
 }) => {
   const [selectedTaskId, setSelectedTaskId] = useState<string>(
-    defaultTaskId || tasks.find(t => t.code === 'PLAT-CLI-07')?.id || tasks[0]?.id
+    defaultTaskId || tasks.find((t) => t.code === 'PLAT-SECOPS-12')?.id || tasks[0]?.id
   );
-  const [activeTab, setActiveTab] = useState<'RUNNER' | 'AST_CHECKER' | 'UNIT_TESTS'>('RUNNER');
+  const [activeTab, setActiveTab] = useState<'RUNNER' | 'FIPS_SECOPS' | 'AST_CHECKER' | 'UNIT_TESTS'>('FIPS_SECOPS');
   const [isExecutingAll, setIsExecutingAll] = useState<boolean>(false);
   const [currentRunningPhase, setCurrentRunningPhase] = useState<number | null>(null);
   const [phaseResults, setPhaseResults] = useState<Record<number, VibePhaseExecutionResult>>({});
   const [forceFallback, setForceFallback] = useState<boolean>(false);
-  const [testCategoryFilter, setTestCategoryFilter] = useState<'ALL' | '정상' | '예외' | '오류'>('ALL');
-  const [testResults, setTestResults] = useState<HarnessCliTestResult[]>(() => runHarnessCliUnitTests());
+  const [testCategoryFilter, setTestCategoryFilter] = useState<'ALL' | '정상' | '예외' | '오류' | 'SECOPS'>('ALL');
+  const [harnessTests, setHarnessTests] = useState<HarnessCliTestResult[]>(() => runHarnessCliUnitTests());
+  const [secOpsTests, setSecOpsTests] = useState<SecOpsTestScenarioResult[]>(() => runSecOpsAutoHealingUnitTests());
+
+  // SecOps Playground State
+  const [secOpsCode, setSecOpsCode] = useState<string>(SECOPS_PRESETS.SQLI_AND_AUDIT);
+  const [secOpsReport, setSecOpsReport] = useState<FipsSecOpsReport>(() =>
+    SecOpsEngine.audit(SECOPS_PRESETS.SQLI_AND_AUDIT, { isDbSchema: true })
+  );
+  const [healedDiffSummary, setHealedDiffSummary] = useState<string[]>([]);
+  const [isAutoHealingTriggered, setIsAutoHealingTriggered] = useState<boolean>(false);
 
   // AST Direct Playground state
   const [customCode, setCustomCode] = useState<string>(`// JKADH Platform Component AST Verification Example
@@ -70,20 +129,17 @@ export class VibeAstValidatorEngine {
   }
 }
 `);
-  const [astValidationReport, setAstValidationReport] = useState(AstValidator.validate(customCode, { isDbSchema: true }));
+  const [astValidationReport, setAstValidationReport] = useState(
+    AstValidator.validate(customCode, { isDbSchema: true })
+  );
 
   const currentTask = tasks.find((t) => t.id === selectedTaskId) || tasks[0];
 
   // Re-run unit tests
   const handleRerunTests = () => {
-    setTestResults(runHarnessCliUnitTests());
+    setHarnessTests(runHarnessCliUnitTests());
+    setSecOpsTests(runSecOpsAutoHealingUnitTests());
   };
-
-  // Filtered unit tests
-  const filteredTests = testResults.filter((t) => {
-    if (testCategoryFilter === 'ALL') return true;
-    return t.category.includes(testCategoryFilter);
-  });
 
   // Execute single phase
   const handleRunSinglePhase = async (phaseNum: number) => {
@@ -114,7 +170,7 @@ export class VibeAstValidatorEngine {
           task: currentTask,
           phaseNumber: p,
           models,
-          forceFallback: p === 4 && forceFallback, // simulate fallback on phase 4
+          forceFallback: p === 4 && forceFallback,
         });
         setPhaseResults((prev) => ({ ...prev, [p]: res }));
         await new Promise((r) => setTimeout(r, 200));
@@ -123,6 +179,34 @@ export class VibeAstValidatorEngine {
       setIsExecutingAll(false);
       setCurrentRunningPhase(null);
     }
+  };
+
+  // Handle SecOps Code Change
+  const handleSecOpsCodeChange = (text: string) => {
+    setSecOpsCode(text);
+    setIsAutoHealingTriggered(false);
+    setHealedDiffSummary([]);
+    const report = SecOpsEngine.audit(text, { isDbSchema: true });
+    setSecOpsReport(report);
+  };
+
+  // Load Preset
+  const handleLoadPreset = (key: keyof typeof SECOPS_PRESETS) => {
+    const code = SECOPS_PRESETS[key];
+    setSecOpsCode(code);
+    setIsAutoHealingTriggered(false);
+    setHealedDiffSummary([]);
+    const report = SecOpsEngine.audit(code, { isDbSchema: true });
+    setSecOpsReport(report);
+  };
+
+  // Trigger 1-Turn Auto-Healing
+  const handleTriggerAutoHealing = () => {
+    const outcome = SecOpsEngine.autoHeal(secOpsCode, secOpsReport, { isDbSchema: true });
+    setSecOpsCode(outcome.healedCode);
+    setSecOpsReport(outcome.report);
+    setIsAutoHealingTriggered(true);
+    setHealedDiffSummary(outcome.report.autoHealingDetails?.diffSummary || []);
   };
 
   // Trigger real-time AST check on code edit
@@ -134,13 +218,17 @@ export class VibeAstValidatorEngine {
 
   const totalTokens = Object.values(phaseResults).reduce((acc, cur) => acc + cur.tokensConsumed, 0);
   const totalDuration = Object.values(phaseResults).reduce((acc, cur) => acc + cur.durationMs, 0);
-  const avgScore = Object.values(phaseResults).length > 0
-    ? Math.round(Object.values(phaseResults).reduce((acc, cur) => acc + cur.outputArtifact.gatekeeperScore, 0) / Object.values(phaseResults).length)
-    : 0;
+  const avgScore =
+    Object.values(phaseResults).length > 0
+      ? Math.round(
+          Object.values(phaseResults).reduce((acc, cur) => acc + cur.outputArtifact.gatekeeperScore, 0) /
+            Object.values(phaseResults).length
+        )
+      : 0;
 
   return (
     <div className="space-y-4">
-      {/* Top Banner & Control Bar (상하 열거 레이아웃) */}
+      {/* Top Banner & Control Bar */}
       <div className="bg-[#161B22] border border-[#30363D] rounded-xl p-4 space-y-3 shadow-xs">
         <div>
           <div className="flex items-center gap-2">
@@ -149,39 +237,52 @@ export class VibeAstValidatorEngine {
             </div>
             <div>
               <h2 className="text-base font-bold text-[#E6EDF3] flex items-center gap-2">
-                실시간 7-Phase Vibe Runner 샌드박스 & AST 정적 검증기
+                실시간 7-Phase Vibe Runner 샌드박스 & FIPS-140-3 3단계 보안 감사기
                 <span className="px-2 py-0.5 rounded-full text-[10px] bg-pink-500/20 text-pink-300 font-mono border border-pink-500/30">
-                  PLAT-VIBE-06
+                  PLAT-SECOPS-12
                 </span>
               </h2>
               <p className="text-xs text-[#7D8590] mt-0.5">
-                AI 에이전트 코드 생성 무결점 검증, 7-Phase 순환 시뮬레이터 및 TypeScript AST 정적 구문 분석기
+                FIPS-140-3 3단계 정적 AST 보안 감사, 위험 토큰 실시간 탐지 및 1턴 자율 치유(Auto-Healing) 엔진
               </p>
             </div>
           </div>
         </div>
 
-        {/* Tab Switcher (하단 배치) */}
-        <div className="pt-2 border-t border-[#30363D]/70 flex items-center gap-2">
-          <div className="flex items-center bg-[#0D1117] p-0.5 rounded-lg border border-[#30363D]">
+        {/* Tab Navigation */}
+        <div className="flex items-center justify-between border-t border-[#30363D] pt-3">
+          <div className="flex items-center gap-1 bg-[#0D1117] p-1 rounded-lg border border-[#30363D]">
+            <button
+              onClick={() => setActiveTab('FIPS_SECOPS')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'FIPS_SECOPS'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-[#7D8590] hover:text-[#E6EDF3]'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              FIPS-140-3 보안 & Auto-Healing
+            </button>
             <button
               onClick={() => setActiveTab('RUNNER')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'RUNNER'
                   ? 'bg-blue-600 text-white shadow-sm'
                   : 'text-[#7D8590] hover:text-[#E6EDF3]'
               }`}
             >
+              <Play className="w-3.5 h-3.5" />
               7-Phase 순환 실행기
             </button>
             <button
               onClick={() => setActiveTab('AST_CHECKER')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'AST_CHECKER'
                   ? 'bg-blue-600 text-white shadow-sm'
                   : 'text-[#7D8590] hover:text-[#E6EDF3]'
               }`}
             >
+              <Code2 className="w-3.5 h-3.5" />
               AST 무결점 분석기
             </button>
             <button
@@ -199,7 +300,259 @@ export class VibeAstValidatorEngine {
         </div>
       </div>
 
-      {activeTab === 'RUNNER' ? (
+      {activeTab === 'FIPS_SECOPS' ? (
+        /* FIPS-140-3 3-Level SecOps & Auto-Healing View */
+        <div className="space-y-4">
+          {/* Level 1/2/3 Status Header Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="bg-[#161B22] border border-[#30363D] rounded-xl p-3.5 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#7D8590] uppercase">FIPS 종합 준수 점수</span>
+                <Award className="w-4 h-4 text-yellow-400" />
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span
+                  className={`text-2xl font-black font-mono ${
+                    secOpsReport.fipsScore === 100
+                      ? 'text-emerald-400'
+                      : secOpsReport.fipsScore >= 70
+                      ? 'text-amber-400'
+                      : 'text-red-400'
+                  }`}
+                >
+                  {secOpsReport.fipsScore}
+                </span>
+                <span className="text-xs text-[#7D8590]">/ 100점</span>
+              </div>
+              <span className="text-[10px] text-[#8B949E] block">
+                {secOpsReport.isCompliant ? '✓ 게이트키퍼 통과 승인' : '⚠ 보안 결함 탐지 (조치 필요)'}
+              </span>
+            </div>
+
+            <div className="bg-[#161B22] border border-[#30363D] rounded-xl p-3.5 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#7D8590] uppercase">Level 1: Secret Vault</span>
+                <Lock className="w-4 h-4 text-blue-400" />
+              </div>
+              <div className="text-sm font-bold">
+                {secOpsReport.level1SecretScanPassed ? (
+                  <span className="text-emerald-400 flex items-center gap-1">✓ 무결점 (No Leaks)</span>
+                ) : (
+                  <span className="text-red-400 flex items-center gap-1">✕ API Key 노출 검출</span>
+                )}
+              </div>
+              <span className="text-[10px] text-[#8B949E] block">Anthropic / OpenAI / Gemini / AWS 키 탐지</span>
+            </div>
+
+            <div className="bg-[#161B22] border border-[#30363D] rounded-xl p-3.5 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#7D8590] uppercase">Level 2: Injection 방어</span>
+                <Flame className="w-4 h-4 text-amber-400" />
+              </div>
+              <div className="text-sm font-bold">
+                {secOpsReport.level2InjectionScanPassed ? (
+                  <span className="text-emerald-400 flex items-center gap-1">✓ 방어 통과 ($1 바인딩)</span>
+                ) : (
+                  <span className="text-amber-400 flex items-center gap-1">⚠ 원시 SQL 결합 검출</span>
+                )}
+              </div>
+              <span className="text-[10px] text-[#8B949E] block">Prepared Statement & eval() 검사</span>
+            </div>
+
+            <div className="bg-[#161B22] border border-[#30363D] rounded-xl p-3.5 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#7D8590] uppercase">Level 3: Governance DDL</span>
+                <ShieldAlert className="w-4 h-4 text-purple-400" />
+              </div>
+              <div className="text-sm font-bold">
+                {secOpsReport.isBlocked ? (
+                  <span className="text-red-400 font-bold flex items-center gap-1">🚨 파괴적 DDL 차단됨</span>
+                ) : secOpsReport.level3GovernancePassed ? (
+                  <span className="text-emerald-400 flex items-center gap-1">✓ 6대 감사 컬럼 완비</span>
+                ) : (
+                  <span className="text-purple-300 flex items-center gap-1">⚠ 감사 컬럼 누락</span>
+                )}
+              </div>
+              <span className="text-[10px] text-[#8B949E] block">DROP 차단 & 6대 공통 감사 컬럼</span>
+            </div>
+          </div>
+
+          {/* Main SecOps Editor & Findings Pane */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Left: Code Editor with Presets */}
+            <div className="bg-[#161B22] border border-[#30363D] rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between border-b border-[#30363D] pb-3">
+                <h3 className="text-xs font-bold text-[#E6EDF3] flex items-center gap-1.5">
+                  <Code2 className="w-4 h-4 text-blue-400" />
+                  FIPS 보안 감사 대상 소스코드
+                </h3>
+                <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                  {secOpsReport.sha256Signature.slice(0, 20)}...
+                </span>
+              </div>
+
+              {/* Preset Selector */}
+              <div className="flex flex-wrap gap-1.5 text-[11px]">
+                <span className="text-[#7D8590] self-center mr-1">시나리오 프리셋:</span>
+                <button
+                  onClick={() => handleLoadPreset('CLEAN')}
+                  className="px-2 py-1 rounded bg-[#0D1117] hover:bg-[#21262D] text-[#E6EDF3] border border-[#30363D] transition cursor-pointer"
+                >
+                  1. 정상 (Happy 100점)
+                </button>
+                <button
+                  onClick={() => handleLoadPreset('SECRET_LEAK')}
+                  className="px-2 py-1 rounded bg-[#0D1117] hover:bg-[#21262D] text-red-300 border border-red-800/40 transition cursor-pointer"
+                >
+                  2. API Key 노출 (Leak)
+                </button>
+                <button
+                  onClick={() => handleLoadPreset('SQLI_AND_AUDIT')}
+                  className="px-2 py-1 rounded bg-[#0D1117] hover:bg-[#21262D] text-amber-300 border border-amber-800/40 transition cursor-pointer"
+                >
+                  3. SQLi & 감사컬럼 결함
+                </button>
+                <button
+                  onClick={() => handleLoadPreset('DESTRUCTIVE_ATTACK')}
+                  className="px-2 py-1 rounded bg-[#0D1117] hover:bg-[#21262D] text-purple-300 border border-purple-800/40 transition cursor-pointer"
+                >
+                  4. 악성 DROP 차단
+                </button>
+              </div>
+
+              <textarea
+                rows={14}
+                value={secOpsCode}
+                onChange={(e) => handleSecOpsCodeChange(e.target.value)}
+                className="w-full p-3 rounded-lg bg-[#0D1117] border border-[#30363D] font-mono text-xs text-[#E6EDF3] focus:ring-1 focus:ring-blue-500 leading-relaxed"
+              />
+
+              {/* Auto-Healing Action Bar */}
+              <div className="flex items-center justify-between pt-2 border-t border-[#30363D]">
+                <span className="text-[11px] text-[#7D8590]">
+                  {isAutoHealingTriggered
+                    ? '✓ 1턴 Auto-Healing 자율 치유가 성공적으로 적용되었습니다.'
+                    : secOpsReport.findings.some((f) => f.autoHealable)
+                    ? '⚠ 자동 치유 가능한 보안 취약점이 검출되었습니다.'
+                    : '안전한 코드입니다.'}
+                </span>
+
+                <button
+                  onClick={handleTriggerAutoHealing}
+                  disabled={!secOpsReport.findings.some((f) => f.autoHealable) || isAutoHealingTriggered}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+                    secOpsReport.findings.some((f) => f.autoHealable) && !isAutoHealingTriggered
+                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer shadow-md'
+                      : 'bg-[#21262D] text-[#7D8590] cursor-not-allowed border border-[#30363D]'
+                  }`}
+                >
+                  <Wrench className="w-3.5 h-3.5" />
+                  1턴 Auto-Healing 자율 치유 실행
+                </button>
+              </div>
+            </div>
+
+            {/* Right: SecOps Findings & Auto-Healing Diff */}
+            <div className="bg-[#161B22] border border-[#30363D] rounded-xl p-4 space-y-3 flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b border-[#30363D] pb-3">
+                  <h3 className="text-xs font-bold text-[#E6EDF3] flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    FIPS-140-3 3단계 감사 결과 및 탐지 목록 ({secOpsReport.findings.length}건)
+                  </h3>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      secOpsReport.isBlocked
+                        ? 'bg-red-500/20 text-red-300 border border-red-500/40'
+                        : secOpsReport.isCompliant
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    }`}
+                  >
+                    {secOpsReport.isBlocked ? 'EXECUTION BLOCKED' : secOpsReport.isCompliant ? 'FIPS PASSED' : 'VULNERABLE'}
+                  </span>
+                </div>
+
+                {/* Block Alert if any */}
+                {secOpsReport.isBlocked && (
+                  <div className="p-3 rounded-lg bg-red-950/40 border border-red-800/60 text-xs space-y-1">
+                    <span className="font-bold text-red-400 flex items-center gap-1">
+                      <ShieldAlert className="w-4 h-4" /> 🚨 치명적 파괴 쿼리 차단 안내
+                    </span>
+                    <p className="text-red-200 text-[11px]">{secOpsReport.blockReason}</p>
+                  </div>
+                )}
+
+                {/* Auto-Healing Diff Summary if applied */}
+                {healedDiffSummary.length > 0 && (
+                  <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-800/50 text-xs space-y-1.5">
+                    <span className="font-bold text-emerald-400 flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5" /> 1턴 Auto-Healing 자율 리팩토링 내역:
+                    </span>
+                    <ul className="space-y-1 text-[11px] text-emerald-200 pl-4 list-disc">
+                      {healedDiffSummary.map((item, i) => (
+                        <li key={i}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Findings List */}
+                <div className="space-y-2 max-h-[280px] overflow-y-auto">
+                  {secOpsReport.findings.length === 0 ? (
+                    <div className="p-6 text-center text-xs text-[#7D8590] border border-dashed border-[#30363D] rounded-lg">
+                      <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2 opacity-80" />
+                      FIPS-140-3 3단계 보안 감사 100점 만점 통과입니다. 검출된 취약점이 없습니다.
+                    </div>
+                  ) : (
+                    secOpsReport.findings.map((f) => (
+                      <div
+                        key={f.id}
+                        className={`p-3 rounded-lg border text-xs space-y-1 ${
+                          f.severity === 'CRITICAL'
+                            ? 'bg-red-950/20 border-red-800/40'
+                            : f.severity === 'HIGH'
+                            ? 'bg-amber-950/20 border-amber-800/40'
+                            : 'bg-purple-950/20 border-purple-800/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={`font-bold text-[11px] ${
+                              f.severity === 'CRITICAL'
+                                ? 'text-red-400'
+                                : f.severity === 'HIGH'
+                                ? 'text-amber-400'
+                                : 'text-purple-300'
+                            }`}
+                          >
+                            [Level {f.level}] {f.ruleId}
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase bg-black/40 text-[#E6EDF3]">
+                            {f.severity}
+                          </span>
+                        </div>
+                        <p className="text-[#E6EDF3] text-[11px]">{f.description}</p>
+                        {f.healingStrategy && (
+                          <div className="text-[10px] text-[#7D8590] pt-1 border-t border-[#30363D]/40 font-mono">
+                            치유 전략: {f.healingStrategy}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* FIPS Seal Metadata */}
+              <div className="p-2.5 rounded-lg bg-[#0D1117] border border-[#30363D] text-[10px] font-mono text-[#7D8590] flex items-center justify-between">
+                <span>FIPS-140-3 Audit Seal</span>
+                <span className="text-blue-400 font-bold">{secOpsReport.sha256Signature}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : activeTab === 'RUNNER' ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Left Panel: Target Task & Run Controls */}
           <div className="lg:col-span-1 space-y-4">
@@ -231,7 +584,7 @@ export class VibeAstValidatorEngine {
                   </div>
                   <div className="flex items-center justify-between text-[11px]">
                     <span className="text-[#7D8590]">타겟 브랜치:</span>
-                    <span className="font-mono text-emerald-400 font-bold">{currentTask.gitBranch || 'task/vibe-runner'}</span>
+                    <span className="font-mono text-emerald-400 font-bold">{currentTask.gitBranch || 'task/fips-secops-autohealing'}</span>
                   </div>
                   <p className="text-[11px] text-[#8B949E] pt-1 border-t border-[#21262D] leading-relaxed">
                     {currentTask.description}
@@ -260,130 +613,114 @@ export class VibeAstValidatorEngine {
                 <button
                   onClick={handleRunAll7Phases}
                   disabled={isExecutingAll}
-                  className="w-full py-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-md transition disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                  className={`w-full py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition ${
+                    isExecutingAll
+                      ? 'bg-blue-600/50 text-blue-200 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-500 text-white cursor-pointer shadow-md'
+                  }`}
                 >
-                  <Play className="w-4 h-4" />
-                  {isExecutingAll ? '7-Phase 순환 실행 중...' : '전체 7-Phase Vibe 루프 일괄 실행'}
+                  {isExecutingAll ? (
+                    <>
+                      <Sparkles className="w-4 h-4 animate-spin" />
+                      7-Phase 오케스트레이션 순환 실행 중...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4" />
+                      7-Phase 전체 순차 실행 (시뮬레이션)
+                    </>
+                  )}
                 </button>
               </div>
+            </div>
 
-              {/* Execution Summary Stats */}
-              {Object.keys(phaseResults).length > 0 && (
-                <div className="p-3 rounded-lg bg-[#0D1117] border border-[#30363D] space-y-2 text-xs">
-                  <span className="font-bold text-[#E6EDF3] block border-b border-[#21262D] pb-1">
-                    실행 결산 텔레메트리
-                  </span>
-                  <div className="grid grid-cols-3 gap-2 text-center pt-1">
-                    <div className="p-2 rounded bg-[#161B22] border border-[#21262D]">
-                      <span className="text-[10px] text-[#7D8590] block">총 토큰</span>
-                      <span className="text-xs font-bold text-blue-400">{totalTokens.toLocaleString()}</span>
-                    </div>
-                    <div className="p-2 rounded bg-[#161B22] border border-[#21262D]">
-                      <span className="text-[10px] text-[#7D8590] block">총 시간</span>
-                      <span className="text-xs font-bold text-emerald-400">{totalDuration}ms</span>
-                    </div>
-                    <div className="p-2 rounded bg-[#161B22] border border-[#21262D]">
-                      <span className="text-[10px] text-[#7D8590] block">평균 점수</span>
-                      <span className="text-xs font-bold text-amber-400">{avgScore}점</span>
-                    </div>
+            {/* Execution Metrics Summary */}
+            {Object.keys(phaseResults).length > 0 && (
+              <div className="bg-[#161B22] border border-[#30363D] rounded-xl p-4 space-y-3">
+                <h3 className="text-xs font-bold text-[#E6EDF3] flex items-center gap-1.5">
+                  <Activity className="w-4 h-4 text-blue-400" />
+                  실행 세션 텔레메트리
+                </h3>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="p-2 rounded-lg bg-[#0D1117] border border-[#30363D]">
+                    <span className="text-[10px] text-[#7D8590] block">총 소요 시간</span>
+                    <span className="font-mono text-xs font-bold text-blue-400">{totalDuration}ms</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-[#0D1117] border border-[#30363D]">
+                    <span className="text-[10px] text-[#7D8590] block">총 토큰 소비</span>
+                    <span className="font-mono text-xs font-bold text-pink-400">{totalTokens.toLocaleString()}</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-[#0D1117] border border-[#30363D]">
+                    <span className="text-[10px] text-[#7D8590] block">평균 게이트 점수</span>
+                    <span className="font-mono text-xs font-bold text-emerald-400">{avgScore} / 100</span>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
-          {/* Right Panel: 7-Phase Execution Timeline & Logs */}
+          {/* Right Panel: 7-Phase Timeline Cards */}
           <div className="lg:col-span-2 space-y-3">
             {[1, 2, 3, 4, 5, 6, 7].map((pNum) => {
               const res = phaseResults[pNum];
               const isRunning = currentRunningPhase === pNum;
-              const phaseName = currentTask.phases.find((p) => p.phaseNumber === pNum)?.nameKr || `Phase ${pNum}`;
+              const phaseInfo = currentTask.phases.find((p) => p.phaseNumber === pNum) || currentTask.phases[0];
 
               return (
                 <div
                   key={pNum}
-                  className={`border rounded-xl p-3.5 transition ${
+                  className={`bg-[#161B22] border rounded-xl p-4 transition ${
                     isRunning
-                      ? 'bg-blue-950/20 border-blue-500/50 shadow-md'
+                      ? 'border-blue-500 shadow-blue-500/10 shadow-lg'
                       : res
-                      ? 'bg-[#161B22] border-[#30363D]'
-                      : 'bg-[#161B22]/50 border-[#21262D] opacity-75'
+                      ? 'border-[#30363D]'
+                      : 'border-[#21262D] opacity-70'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div
-                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold font-mono ${
-                          res
-                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                            : isRunning
-                            ? 'bg-blue-500 text-white animate-pulse'
-                            : 'bg-[#21262D] text-[#8B949E]'
-                        }`}
-                      >
-                        {res ? <Check className="w-3.5 h-3.5" /> : `0${pNum}`}
-                      </div>
+                      <span className="w-6 h-6 rounded-full bg-[#0D1117] border border-[#30363D] flex items-center justify-center font-mono text-xs font-bold text-[#7D8590]">
+                        0{pNum}
+                      </span>
                       <div>
                         <h4 className="text-xs font-bold text-[#E6EDF3] flex items-center gap-2">
-                          Phase 0{pNum}: {phaseName}
+                          {phaseInfo?.nameKr || `Phase 0${pNum}`}
                           {res?.isFallbackTriggered && (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono">
-                              Fallback Swap (300ms)
+                            <span className="px-1.5 py-0.5 rounded text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                              서킷 브레이커 핫스왑 발동
                             </span>
                           )}
                         </h4>
+                        <span className="text-[10px] font-mono text-[#7D8590]">
+                          {phaseInfo?.assignedModelId || 'claude-3-7-sonnet'}
+                        </span>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2">
                       {res && (
-                        <div className="flex items-center gap-2 text-[10px] font-mono text-[#7D8590]">
-                          <span>{res.durationMs}ms</span>
-                          <span>•</span>
-                          <span className="text-blue-400">{res.activeModelId}</span>
-                          <span>•</span>
-                          <span className="text-emerald-400 font-bold">{res.outputArtifact.gatekeeperScore}점</span>
-                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          {res.outputArtifact.gatekeeperScore}점 통과
+                        </span>
                       )}
                       <button
                         onClick={() => handleRunSinglePhase(pNum)}
                         disabled={isRunning || isExecutingAll}
-                        className="px-2.5 py-1 rounded bg-[#0D1117] hover:bg-[#21262D] border border-[#30363D] text-[#E6EDF3] text-[10px] font-semibold transition disabled:opacity-50 flex items-center gap-1 cursor-pointer"
+                        className="px-2.5 py-1 rounded bg-[#0D1117] hover:bg-[#21262D] text-[#E6EDF3] border border-[#30363D] text-[11px] font-medium transition cursor-pointer"
                       >
-                        <Play className="w-3 h-3" />
-                        {isRunning ? '검증 중...' : '단독 실행'}
+                        {isRunning ? '실행 중...' : '단독 실행'}
                       </button>
                     </div>
                   </div>
 
-                  {/* Expanded result if exists */}
+                  {/* Artifact & Ast Report Preview if completed */}
                   {res && (
-                    <div className="mt-3 pt-3 border-t border-[#21262D] space-y-2 text-xs">
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-[#8B949E]">{res.outputArtifact.description}</span>
-                        <span className="font-mono text-[10px] text-purple-400">Savepoint: {res.savepointName}</span>
+                    <div className="mt-3 pt-3 border-t border-[#21262D] text-xs space-y-2">
+                      <div className="flex items-center justify-between text-[11px] text-[#7D8590]">
+                        <span>소요: {res.durationMs}ms | 소비: {res.tokensConsumed.toLocaleString()} Tokens</span>
+                        <span className="font-mono text-emerald-400">{res.savepointName}</span>
                       </div>
-
-                      {res.outputArtifact.generatedCodeSnippet && (
-                        <pre className="p-2.5 rounded-lg bg-[#0D1117] border border-[#30363D] font-mono text-[10px] text-blue-300 overflow-x-auto max-h-32">
-                          {res.outputArtifact.generatedCodeSnippet}
-                        </pre>
-                      )}
-
-                      {/* AST Report Pill */}
-                      <div className="flex flex-wrap items-center gap-2 text-[10px]">
-                        <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3" /> AST 정적 구문 정상
-                        </span>
-                        {res.astReport.hasAuditColumns && (
-                          <span className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center gap-1">
-                            <Database className="w-3 h-3" /> 6대 감사 컬럼 확인
-                          </span>
-                        )}
-                        <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
-                          <ShieldCheck className="w-3 h-3" /> FIPS-140-2 암호화 검증
-                        </span>
-                      </div>
+                      <p className="text-[11px] text-[#8B949E]">{res.outputArtifact.description}</p>
                     </div>
                   )}
                 </div>
@@ -392,10 +729,10 @@ export class VibeAstValidatorEngine {
           </div>
         </div>
       ) : activeTab === 'AST_CHECKER' ? (
-        /* AST Interactive Checker View */
+        /* AST Direct Code Checker View */
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="bg-[#161B22] border border-[#30363D] rounded-xl p-4 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between border-b border-[#30363D] pb-3">
               <h3 className="text-xs font-bold text-[#E6EDF3] flex items-center gap-1.5">
                 <Code2 className="w-4 h-4 text-blue-400" />
                 TypeScript 코드 실시간 AST 에디터
@@ -442,7 +779,9 @@ export class VibeAstValidatorEngine {
 
               {astValidationReport.typeErrors.length > 0 && (
                 <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-800/40 space-y-1">
-                  <span className="font-bold text-amber-400 text-xs block">타입 엄격성 결함 (Strict Type Violations):</span>
+                  <span className="font-bold text-amber-400 text-xs block">
+                    타입 엄격성 결함 (Strict Type Violations):
+                  </span>
                   {astValidationReport.typeErrors.map((err, i) => (
                     <div key={i} className="text-amber-300 text-[11px] font-mono pl-2">
                       • {err}
@@ -462,7 +801,13 @@ export class VibeAstValidatorEngine {
                 </div>
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-[#7D8590]">any 타입 사용 금지:</span>
-                  <span className={astValidationReport.typeErrors.length === 0 ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
+                  <span
+                    className={
+                      astValidationReport.typeErrors.length === 0
+                        ? 'text-emerald-400 font-bold'
+                        : 'text-red-400 font-bold'
+                    }
+                  >
                     {astValidationReport.typeErrors.length === 0 ? '✓ 충족 (No any)' : '✕ 위반 (any 검출)'}
                   </span>
                 </div>
@@ -481,20 +826,20 @@ export class VibeAstValidatorEngine {
             <div>
               <h3 className="text-sm font-bold text-[#E6EDF3] flex items-center gap-2">
                 <ListChecks className="w-4 h-4 text-blue-400" />
-                하네스 6대 라이프사이클 3대 시나리오 테스트 카탈로그
+                하네스 6대 라이프사이클 & FIPS-140-3 3대 시나리오 테스트 카탈로그
               </h3>
               <p className="text-xs text-[#7D8590] mt-0.5">
-                테스트ID, 작업그래프ID, 세션ID, 태스크ID, 작업ID 연계 100% 추적성 검증
+                정상(Happy Path), 1턴 자율치유(Auto-Healing), 예외경계(Edge Bounds) 단위 테스트
               </p>
             </div>
 
             <div className="flex items-center gap-2">
               <div className="flex bg-[#0D1117] p-1 rounded-lg border border-[#30363D] text-[11px]">
-                {(['ALL', '정상', '오류', '예외'] as const).map((cat) => (
+                {(['ALL', 'SECOPS', '정상', '오류', '예외'] as const).map((cat) => (
                   <button
                     key={cat}
                     onClick={() => setTestCategoryFilter(cat)}
-                    className={`px-2.5 py-1 rounded font-medium transition ${
+                    className={`px-2.5 py-1 rounded font-medium transition cursor-pointer ${
                       testCategoryFilter === cat
                         ? 'bg-blue-600 text-white font-bold'
                         : 'text-[#7D8590] hover:text-[#E6EDF3]'
@@ -515,58 +860,117 @@ export class VibeAstValidatorEngine {
             </div>
           </div>
 
-          {/* Test Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-[#0D1117] text-[#7D8590] border-b border-[#30363D] text-[11px] uppercase font-mono">
-                  <th className="py-2.5 px-3">테스트ID</th>
-                  <th className="py-2.5 px-3">구분</th>
-                  <th className="py-2.5 px-3">작업그래프ID</th>
-                  <th className="py-2.5 px-3">세션ID</th>
-                  <th className="py-2.5 px-3">태스크ID</th>
-                  <th className="py-2.5 px-3">작업ID</th>
-                  <th className="py-2.5 px-3">테스트대상</th>
-                  <th className="py-2.5 px-3">테스트내용 & 세부결과</th>
-                  <th className="py-2.5 px-3 text-center">결과</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#21262D]">
-                {filteredTests.map((tc) => (
-                  <tr key={tc.testId} className="hover:bg-[#1C2128] transition">
-                    <td className="py-2.5 px-3 font-mono font-bold text-blue-400">{tc.testId}</td>
-                    <td className="py-2.5 px-3">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          tc.category.includes('정상')
-                            ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30'
-                            : tc.category.includes('오류')
-                            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-                            : 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
-                        }`}
-                      >
-                        {tc.category}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 font-mono text-[#8B949E] text-[11px]">{tc.taskGraphId}</td>
-                    <td className="py-2.5 px-3 font-mono text-[#8B949E] text-[11px]">{tc.sessionId}</td>
-                    <td className="py-2.5 px-3 font-mono font-bold text-emerald-400 text-[11px]">{tc.taskId}</td>
-                    <td className="py-2.5 px-3 font-mono text-[#8B949E] text-[11px]">{tc.workId}</td>
-                    <td className="py-2.5 px-3 font-mono text-cyan-300 text-[11px]">{tc.target}</td>
-                    <td className="py-2.5 px-3 max-w-xs">
-                      <div className="font-medium text-[#E6EDF3] leading-snug">{tc.description}</div>
-                      <div className="text-[10px] text-[#7D8590] mt-0.5 font-mono">{tc.details}</div>
-                    </td>
-                    <td className="py-2.5 px-3 text-center">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                        <Check className="w-3 h-3" /> PASS
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {/* SecOps 3-Scenario Tests Section */}
+          {(testCategoryFilter === 'ALL' || testCategoryFilter === 'SECOPS') && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-pink-400 uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5" /> [PLAT-SECOPS-12] FIPS-140-3 & Auto-Healing 3대 시나리오 테스트
+              </h4>
+              <div className="overflow-x-auto border border-[#30363D] rounded-lg">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-[#0D1117] text-[#7D8590] border-b border-[#30363D] text-[11px] font-mono">
+                      <th className="py-2.5 px-3">테스트ID</th>
+                      <th className="py-2.5 px-3">시나리오</th>
+                      <th className="py-2.5 px-3">대상 룰셋</th>
+                      <th className="py-2.5 px-3">테스트 명세 & 검증 결과</th>
+                      <th className="py-2.5 px-3 text-center">점수 변화</th>
+                      <th className="py-2.5 px-3 text-center">결과</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#21262D]">
+                    {secOpsTests.map((st) => (
+                      <tr key={st.testId} className="hover:bg-[#1C2128] transition">
+                        <td className="py-2.5 px-3 font-mono font-bold text-pink-400">{st.testId}</td>
+                        <td className="py-2.5 px-3">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              st.scenario.includes('Happy')
+                                ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30'
+                                : st.scenario.includes('Auto-Healing')
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-red-500/10 text-red-400 border border-red-500/30'
+                            }`}
+                          >
+                            {st.scenario}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-cyan-300 text-[11px]">{st.targetRule}</td>
+                        <td className="py-2.5 px-3 max-w-sm">
+                          <div className="font-medium text-[#E6EDF3] leading-snug">{st.description}</div>
+                          <div className="text-[10px] text-[#7D8590] mt-0.5 font-mono">{st.details}</div>
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-mono font-bold text-xs">
+                          {st.initialScore}점 ➔ <span className="text-emerald-400">{st.finalScore}점</span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            <Check className="w-3 h-3" /> PASS
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Harness CLI Tests Table */}
+          {testCategoryFilter !== 'SECOPS' && (
+            <div className="space-y-2 pt-2">
+              <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5" /> 하네스 거버넌스 CLI 3대 시나리오 테스트
+              </h4>
+              <div className="overflow-x-auto border border-[#30363D] rounded-lg">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-[#0D1117] text-[#7D8590] border-b border-[#30363D] text-[11px] uppercase font-mono">
+                      <th className="py-2.5 px-3">테스트ID</th>
+                      <th className="py-2.5 px-3">구분</th>
+                      <th className="py-2.5 px-3">태스크ID</th>
+                      <th className="py-2.5 px-3">테스트대상</th>
+                      <th className="py-2.5 px-3">테스트내용 & 세부결과</th>
+                      <th className="py-2.5 px-3 text-center">결과</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#21262D]">
+                    {harnessTests
+                      .filter((tc) => testCategoryFilter === 'ALL' || tc.category.includes(testCategoryFilter))
+                      .map((tc) => (
+                        <tr key={tc.testId} className="hover:bg-[#1C2128] transition">
+                          <td className="py-2.5 px-3 font-mono font-bold text-blue-400">{tc.testId}</td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                tc.category.includes('정상')
+                                  ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30'
+                                  : tc.category.includes('오류')
+                                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                                  : 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
+                              }`}
+                            >
+                              {tc.category}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 font-mono font-bold text-emerald-400 text-[11px]">{tc.taskId}</td>
+                          <td className="py-2.5 px-3 font-mono text-cyan-300 text-[11px]">{tc.target}</td>
+                          <td className="py-2.5 px-3 max-w-xs">
+                            <div className="font-medium text-[#E6EDF3] leading-snug">{tc.description}</div>
+                            <div className="text-[10px] text-[#7D8590] mt-0.5 font-mono">{tc.details}</div>
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              <Check className="w-3 h-3" /> PASS
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -1839,6 +1839,30 @@ export const INITIAL_TASK_GRAPH: TaskGraphNode[] = [
     addedAt: '2026-08-21 07:50 (차기 세션 핵심 백로그 등록)',
     addedReason: '실제 AI 개발 플랫폼의 역할별 에이전트 자율 개발 워크플로우 실현',
   },
+  {
+    id: 'node-plat-secops-autohealing',
+    code: 'PLAT-SECOPS-12',
+    title: 'FIPS-140-3 3단계 보안 감사 엔진 및 취약점 1턴 자동 패치(Auto-Healing)',
+    module: 'SECURITY',
+    complexity: 'MEDIUM',
+    estimatedTokens: 45000,
+    status: 'DONE',
+    dependencies: ['node-plat-model-agent-auth', 'node-plat-audit-trail'],
+    assignedTo: 'mem-jkoo',
+    currentPhase: 7,
+    riskLevel: 'LOW',
+    description: 'Phase 6 (LOOP_SECOPS) FIPS-140-3 정적 AST 보안 검사 강화, 위험 토큰/하드코딩 키/SQL Injection 실시간 탐지 및 보안 결함 발견 시 1턴 자체 자동 패치(Auto-Healing) 루프 구현',
+    phases: INITIAL_7_PHASES_TEMPLATE,
+    gitBranch: 'task/fips-secops-autohealing',
+    targetGitBranch: 'main',
+    releaseTag: 'v2.6.0',
+    targetMilestone: 'v2.6.0',
+    specValidationScore: 100,
+    targetRepo: 'jkadh-typep',
+    migrationStatus: 'NOT_APPLICABLE',
+    addedAt: '2026-08-22 02:45',
+    addedReason: '정적 보안 취약점 원천 차단 및 AI 에이전트 1턴 자율 치유(Auto-Healing) 루프 완결',
+  },
 
   // ============================================================================
   // [2] 타겟 서비스(PDF 뷰어/에디터) 분리 이관 대기 보류 목록 (On-Hold Migration Graph)
@@ -2161,6 +2185,7 @@ export const INITIAL_DB_TABLES: DatabaseTableMeta[] = [
       { name: 'mod_dt', type: 'TIMESTAMP', isNullable: false, description: '수정 일시' },
     ],
     sampleRecords: [
+      { session_code: 'SES-20260825-SECOPS-HEALING-12', user_id: 'jkoogi', user_email: 'jkoogit@gmail.com', status: 'COMPLETED', target_database: 'jkadhp_dev', active_task_code: 'PLAT-SECOPS-12', active_phase_num: 7, tokens_consumed_total: 45000 },
       { session_code: 'SES-20260820-TELEMETRY-09', user_id: 'jkoogi', user_email: 'jkoogit@gmail.com', status: 'COMPLETED', target_database: 'jkadhp_dev', active_task_code: 'PLAT-MON-08', active_phase_num: 7, tokens_consumed_total: 30000 },
       { session_code: 'SES-20260820-08', user_id: 'jkoogi', user_email: 'jkoogit@gmail.com', status: 'COMPLETED', target_database: 'jkadhp_dev', active_task_code: 'PLAT-CLI-07', active_phase_num: 7, tokens_consumed_total: 42000 },
       { session_code: 'SES-20260819-VIBE-07', user_id: 'jkoogi', user_email: 'jkoogit@gmail.com', status: 'COMPLETED', target_database: 'jkadhp_dev', active_task_code: 'PLAT-VIBE-06', active_phase_num: 7, tokens_consumed_total: 58200 },

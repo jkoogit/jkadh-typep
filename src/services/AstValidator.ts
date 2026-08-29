@@ -1,10 +1,14 @@
 import { AstValidationReport } from '../types/vibeRunner';
+import { SecOpsEngine } from './SecOpsEngine';
 
 export class AstValidator {
   /**
-   * TypeScript 코드에 대한 AST 정적 구문 및 JKADH 아키텍처 거버넌스 규칙 검증
+   * TypeScript 코드에 대한 AST 정적 구문 및 JKADH 아키텍처 거버넌스, FIPS-140-3 3단계 보안 규칙 검증
    */
-  public static validate(code: string, context?: { isTestFile?: boolean; isDbSchema?: boolean }): AstValidationReport {
+  public static validate(
+    code: string,
+    context?: { isTestFile?: boolean; isDbSchema?: boolean; enableAutoHealing?: boolean }
+  ): AstValidationReport {
     const syntaxErrors: string[] = [];
     const typeErrors: string[] = [];
     const missingImports: string[] = [];
@@ -23,6 +27,7 @@ export class AstValidator {
         hasScenarioTests: false,
         complexityScore: 0,
         warnings: [],
+        secOpsReport: SecOpsEngine.audit(code, context),
       };
     }
 
@@ -94,8 +99,15 @@ export class AstValidator {
     const isValid = syntaxErrors.length === 0 && typeErrors.length === 0;
     const governanceAuditPassed = isValid && (context?.isDbSchema ? hasAuditColumns : true);
 
+    // 8. FIPS-140-3 3-Level SecOps Audit
+    let secOpsReport = SecOpsEngine.audit(code, context);
+    if (context?.enableAutoHealing && !secOpsReport.isCompliant && !secOpsReport.isBlocked) {
+      const healResult = SecOpsEngine.autoHeal(code, secOpsReport, context);
+      secOpsReport = healResult.report;
+    }
+
     return {
-      isValid,
+      isValid: isValid && !secOpsReport.isBlocked,
       syntaxErrors,
       typeErrors,
       missingImports,
@@ -105,6 +117,7 @@ export class AstValidator {
       hasScenarioTests,
       complexityScore,
       warnings,
+      secOpsReport,
     };
   }
 }

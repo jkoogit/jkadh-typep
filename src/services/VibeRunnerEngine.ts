@@ -95,23 +95,24 @@ describe('VibeRunner 3-Scenario Tests', () => {
       `.trim();
     }
 
-    // Run AST Validation
+    // Run AST Validation & SecOps Audit
     const astReport = AstValidator.validate(codeSnippet, {
       isTestFile: phaseNumber === 4,
       isDbSchema: phaseNumber === 3,
+      enableAutoHealing: !!simulateAutoHealing || phaseNumber === 6,
     });
 
     const durationMs = Math.round(180 + Math.random() * 240);
     const tokensConsumed = Math.round(12000 + Math.random() * 8000);
     const costUSD = Number(((tokensConsumed / 1000000) * 3.0).toFixed(4));
 
-    const gatekeeperScore = astReport.isValid ? 98 : 75;
+    const gatekeeperScore = astReport.isValid && (astReport.secOpsReport?.isCompliant ?? true) ? 99 : 75;
 
     return {
       phaseNumber,
       phaseNameKr: phase.nameKr,
       loopAction,
-      status: 'COMPLETED',
+      status: astReport.isValid ? 'COMPLETED' : 'FAILED',
       durationMs,
       tokensConsumed,
       costUSD,
@@ -124,7 +125,7 @@ describe('VibeRunner 3-Scenario Tests', () => {
       astReport,
       outputArtifact: {
         title: `[${task.code}] Phase ${phaseNumber} 산출물 (${loopAction})`,
-        description: `모델 [${activeModelId}] (${authBindingStatus === 'BOUND' ? '🔒 Vault ' + (vaultKeyAlias || vaultKeyMasked) : '⚙️ System Env'})에 의해 ${durationMs}ms 동안 생성 및 AST 검증 완료`,
+        description: `모델 [${activeModelId}] (${authBindingStatus === 'BOUND' ? '🔒 Vault ' + (vaultKeyAlias || vaultKeyMasked) : '⚙️ System Env'})에 의해 ${durationMs}ms 동안 생성 및 AST/FIPS SecOps 검증 완료`,
         generatedCodeSnippet: codeSnippet,
         testSummary: {
           happyPathPassed: true,
@@ -133,13 +134,13 @@ describe('VibeRunner 3-Scenario Tests', () => {
           totalPassRate: 100,
         },
         secopsReport: {
-          fipsCompliance: true,
-          sqlInjectionDefended: true,
-          rbacSanitized: true,
+          fipsCompliance: astReport.secOpsReport?.isCompliant ?? true,
+          sqlInjectionDefended: astReport.secOpsReport?.level2InjectionScanPassed ?? true,
+          rbacSanitized: astReport.secOpsReport?.level3GovernancePassed ?? true,
         },
         gatekeeperScore,
       },
-      errorSummary: null,
+      errorSummary: astReport.isValid ? null : astReport.syntaxErrors.join('; ') || astReport.secOpsReport?.blockReason || '보안 거버넌스 검증 실패',
       savepointName: `sp_${task.code.toLowerCase().replace(/-/g, '_')}_p${phaseNumber}`,
       executedAt: new Date().toISOString(),
     };

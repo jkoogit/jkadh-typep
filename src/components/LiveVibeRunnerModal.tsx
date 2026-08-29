@@ -281,6 +281,43 @@ export const LiveVibeRunnerModal: React.FC<LiveVibeRunnerModalProps> = ({
                 </div>
               )}
 
+              {/* AST & FIPS SecOps Report Badge if available */}
+              {result.astReport && (
+                <div className="p-3 rounded-lg bg-[#161B22] border border-[#30363D] space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-[#E6EDF3] flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      AST 정적 검증 & FIPS-140-3 보안 점수
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        result.astReport.secOpsReport?.fipsScore === 100
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                          : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      }`}
+                    >
+                      FIPS {result.astReport.secOpsReport?.fipsScore ?? 100} / 100점
+                    </span>
+                  </div>
+
+                  {result.astReport.secOpsReport?.autoHealingTriggered && (
+                    <div className="p-2 rounded bg-emerald-950/20 border border-emerald-800/40 text-[10px] text-emerald-300">
+                      ✓ 1턴 Auto-Healing 자율 치유가 성공적으로 적용되었습니다. (치유 항목:{' '}
+                      {result.astReport.secOpsReport.autoHealingDetails?.fixedCount}건)
+                    </div>
+                  )}
+
+                  {result.astReport.secOpsReport?.sha256Signature && (
+                    <div className="text-[10px] font-mono text-[#7D8590] flex items-center justify-between">
+                      <span>FIPS SHA-256 서명:</span>
+                      <span className="text-blue-400 font-bold">
+                        {result.astReport.secOpsReport.sha256Signature}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Output text */}
               <div className="space-y-1">
                 <span className="text-[10px] font-bold text-[#7D8590] uppercase">AI 산출물 명세:</span>
