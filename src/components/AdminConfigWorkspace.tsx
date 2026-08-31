@@ -44,6 +44,7 @@ interface AdminConfigWorkspaceProps {
   currentSubTab: AdminConfigSubTab;
   onSelectSubTab: (subTab: AdminConfigSubTab) => void;
   tasks: TaskGraphNode[];
+  onUpdateTasks?: (updatedTasks: TaskGraphNode[]) => void;
   selectedTaskId: string;
   onSelectTask: (taskId: string) => void;
   accounts: AIAccount[];
@@ -72,6 +73,7 @@ export const AdminConfigWorkspace: React.FC<AdminConfigWorkspaceProps> = ({
   currentSubTab,
   onSelectSubTab,
   tasks,
+  onUpdateTasks,
   selectedTaskId,
   onSelectTask,
   accounts,
@@ -149,6 +151,7 @@ export const AdminConfigWorkspace: React.FC<AdminConfigWorkspaceProps> = ({
             tasks={tasks}
             selectedTaskId={selectedTaskId}
             onSelectTask={onSelectTask}
+            onUpdateTasks={onUpdateTasks}
           />
         )}
 
