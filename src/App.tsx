@@ -528,6 +528,7 @@ export const App: React.FC = () => {
               currentSubTab={adminConfigSubTab}
               onSelectSubTab={(subTab) => setAdminConfigSubTab(subTab)}
               tasks={tasks}
+              onUpdateTasks={(updated) => setTasks(updated)}
               selectedTaskId={selectedTaskId}
               onSelectTask={(id) => setSelectedTaskId(id)}
               accounts={accounts}
