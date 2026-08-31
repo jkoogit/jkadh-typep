@@ -28,21 +28,25 @@ import {
   Archive,
   Layers,
   ExternalLink,
+  Edit3,
 } from 'lucide-react';
 import { TaskGraphNode } from '../types';
+import { WorkflowDesigner } from './WorkflowDesigner';
 
 interface TaskGraphViewerProps {
   tasks: TaskGraphNode[];
   selectedTaskId: string;
   onSelectTask: (taskId: string) => void;
+  onUpdateTasks?: (updatedTasks: TaskGraphNode[]) => void;
 }
 
 export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
   tasks,
   selectedTaskId,
   onSelectTask,
+  onUpdateTasks,
 }) => {
-  const [viewMode, setViewMode] = useState<'BRANCH' | 'GRID'>('BRANCH');
+  const [viewMode, setViewMode] = useState<'BRANCH' | 'GRID' | 'DESIGNER'>('DESIGNER');
   const [activeTab, setActiveTab] = useState<'ALL' | 'PLATFORM' | 'ON_HOLD'>('ALL');
 
   const getModuleIcon = (module: TaskGraphNode['module']) => {
@@ -198,6 +202,16 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
           {/* View Mode Switcher */}
           <div className="flex items-center bg-[#0D1117] p-0.5 rounded-lg border border-[#30363D]">
             <button
+              onClick={() => setViewMode('DESIGNER')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-all cursor-pointer ${
+                viewMode === 'DESIGNER'
+                  ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 shadow-sm font-bold'
+                  : 'text-[#7D8590] hover:text-[#E6EDF3]'
+              }`}
+            >
+              <Workflow className="w-3 h-3 text-indigo-400" /> 워크플로우 디자이너 (D&D)
+            </button>
+            <button
               onClick={() => setViewMode('BRANCH')}
               className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-all cursor-pointer ${
                 viewMode === 'BRANCH'
@@ -234,7 +248,14 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
         </div>
       )}
 
-      {viewMode === 'BRANCH' ? (
+      {viewMode === 'DESIGNER' ? (
+        <WorkflowDesigner
+          tasks={tasks}
+          onUpdateTasks={onUpdateTasks}
+          onSelectTask={onSelectTask}
+          selectedTaskId={selectedTaskId}
+        />
+      ) : viewMode === 'BRANCH' ? (
         <div className="space-y-4">
           {/* ========================================================================= */}
           {/* 1. 미진행된 작업영역 (Pending & Derived Backlog Graph) - 상단 배치          */}
