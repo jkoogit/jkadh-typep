@@ -31,7 +31,10 @@ import {
   ZoomOut,
   Maximize2,
   Info,
-  Filter
+  Filter,
+  Sliders,
+  Grid,
+  Maximize
 } from 'lucide-react';
 import { TaskGraphNode } from '../types';
 
@@ -42,12 +45,7 @@ interface WorkflowDesignerProps {
   selectedTaskId?: string;
 }
 
-interface NodePosition {
-  id: string;
-  x: number;
-  y: number;
-  layer: 'PLATFORM' | 'ON_HOLD';
-}
+export type SpacingPreset = 'COMPACT' | 'STANDARD' | 'SPACIOUS';
 
 export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
   tasks,
@@ -65,46 +63,54 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [validationAlert, setValidationAlert] = useState<{ type: 'ERROR' | 'SUCCESS' | 'INFO'; message: string } | null>(null);
   
+  // ⭐️ 상하·좌우 간격 설정 상태 (Row Gap & Col Gap)
+  const [colGap, setColGap] = useState<number>(360); // 수평 간격 (220 ~ 520px, 기본 360px)
+  const [rowGap, setRowGap] = useState<number>(160); // 수직 간격 (80 ~ 300px, 기본 160px)
+  const [activePreset, setActivePreset] = useState<SpacingPreset>('STANDARD');
+
   // 캔버스 내 노드 위치 관리 (자동 레이아웃 + 드래그 위치)
   const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({});
   const canvasRef = useRef<HTMLDivElement>(null);
 
-  // 초기 그리드 / 계층 자동 배치 로직
-  useEffect(() => {
+  // ⭐️ 계층형 위상 정렬 기반 자동 레이아웃 계산 함수 (Sugiyama Leveling with Spacing)
+  const computeAutoLayout = (
+    taskList: TaskGraphNode[],
+    cGap: number,
+    rGap: number
+  ): Record<string, { x: number; y: number }> => {
     const positions: Record<string, { x: number; y: number }> = {};
     
-    // 1. 플랫폼 활성 DAG 노드 (Layer 1 - 상단/중앙)
-    const platformTasks = localTasks.filter(t => t.targetRepo !== 'pdfowers-service' && t.status !== 'ON_HOLD');
+    // 1. 플랫폼 활성 DAG 노드 (Layer 1 - 상단)
+    const platformTasks = taskList.filter(t => t.targetRepo !== 'pdfowers-service' && t.status !== 'ON_HOLD');
     // 2. 타겟 서비스 보류 노드 (Layer 2 - 하단)
-    const onHoldTasks = localTasks.filter(t => t.targetRepo === 'pdfowers-service' || t.status === 'ON_HOLD');
+    const onHoldTasks = taskList.filter(t => t.targetRepo === 'pdfowers-service' || t.status === 'ON_HOLD');
 
-    // 계층별 토폴로지 레벨 계산
-    const calculateLevels = (taskList: TaskGraphNode[]) => {
+    const calculateLevels = (nodes: TaskGraphNode[]) => {
       const levels: Record<string, number> = {};
       const visited = new Set<string>();
 
       const getLevel = (nodeId: string): number => {
         if (levels[nodeId] !== undefined) return levels[nodeId];
-        const task = taskList.find(t => t.id === nodeId);
+        const task = nodes.find(t => t.id === nodeId);
         if (!task || task.dependencies.length === 0) {
           levels[nodeId] = 0;
           return 0;
         }
-        if (visited.has(nodeId)) return 0; // 순환 방지
+        if (visited.has(nodeId)) return 0;
         visited.add(nodeId);
         const maxParentLevel = Math.max(...task.dependencies.map(depId => getLevel(depId)), -1);
         levels[nodeId] = maxParentLevel + 1;
         return levels[nodeId];
       };
 
-      taskList.forEach(t => getLevel(t.id));
+      nodes.forEach(t => getLevel(t.id));
       return levels;
     };
 
     const platLevels = calculateLevels(platformTasks);
     const onHoldLevels = calculateLevels(onHoldTasks);
 
-    // 플랫폼 노드 배치 (상단 영역 y: 40 ~ 360)
+    // 플랫폼 노드 배치 (Layer 1)
     const platLevelGroups: Record<number, TaskGraphNode[]> = {};
     platformTasks.forEach(t => {
       const lvl = platLevels[t.id] || 0;
@@ -112,16 +118,19 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
       platLevelGroups[lvl].push(t);
     });
 
+    let maxPlatY = 0;
     Object.entries(platLevelGroups).forEach(([lvlStr, group]) => {
       const lvl = parseInt(lvlStr, 10);
-      const colX = 60 + lvl * 280;
+      const colX = 60 + lvl * cGap;
       group.forEach((task, idx) => {
-        const rowY = 50 + idx * 130;
+        const rowY = 50 + idx * rGap;
         positions[task.id] = { x: colX, y: rowY };
+        if (rowY > maxPlatY) maxPlatY = rowY;
       });
     });
 
-    // 보류/이관 노드 배치 (하단 영역 y: 460 ~ 780)
+    // 보류/이관 노드 배치 (Layer 2 - 플랫폼 하단 영역 + 여유 버퍼)
+    const onHoldBaseY = Math.max(520, maxPlatY + rGap + 120);
     const onHoldLevelGroups: Record<number, TaskGraphNode[]> = {};
     onHoldTasks.forEach(t => {
       const lvl = onHoldLevels[t.id] || 0;
@@ -131,15 +140,68 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
 
     Object.entries(onHoldLevelGroups).forEach(([lvlStr, group]) => {
       const lvl = parseInt(lvlStr, 10);
-      const colX = 60 + lvl * 280;
+      const colX = 60 + lvl * cGap;
       group.forEach((task, idx) => {
-        const rowY = 480 + idx * 130;
+        const rowY = onHoldBaseY + idx * rGap;
         positions[task.id] = { x: colX, y: rowY };
       });
     });
 
-    setNodePositions(positions);
+    return positions;
+  };
+
+  // 초기 로드 시 자동 정렬 적용
+  useEffect(() => {
+    const pos = computeAutoLayout(localTasks, colGap, rowGap);
+    setNodePositions(pos);
   }, [tasks.length]);
+
+  // 프리셋 선택 핸들러
+  const handleApplyPreset = (preset: SpacingPreset) => {
+    setActivePreset(preset);
+    let newCol = 360;
+    let newRow = 160;
+    if (preset === 'COMPACT') {
+      newCol = 270;
+      newRow = 105;
+    } else if (preset === 'SPACIOUS') {
+      newCol = 460;
+      newRow = 220;
+    }
+    setColGap(newCol);
+    setRowGap(newRow);
+    const pos = computeAutoLayout(localTasks, newCol, newRow);
+    setNodePositions(pos);
+    setValidationAlert({
+      type: 'INFO',
+      message: `간격 프리셋 [${preset === 'COMPACT' ? '조밀 (Compact)' : preset === 'STANDARD' ? '표준 (Standard)' : '여유 (Spacious)'}]이 적용되었습니다. (수평: ${newCol}px, 수직: ${newRow}px)`
+    });
+  };
+
+  // 슬라이더 변경 핸들러
+  const handleColGapChange = (val: number) => {
+    setColGap(val);
+    setActivePreset('STANDARD');
+    const pos = computeAutoLayout(localTasks, val, rowGap);
+    setNodePositions(pos);
+  };
+
+  const handleRowGapChange = (val: number) => {
+    setRowGap(val);
+    setActivePreset('STANDARD');
+    const pos = computeAutoLayout(localTasks, colGap, val);
+    setNodePositions(pos);
+  };
+
+  // 수동 자동 정렬 재정렬
+  const handleTriggerAutoLayout = () => {
+    const pos = computeAutoLayout(localTasks, colGap, rowGap);
+    setNodePositions(pos);
+    setValidationAlert({
+      type: 'SUCCESS',
+      message: '✨ DAG 위상 정렬(Topological Auto-Layout)이 재계산되어 카드가 최적 여백으로 정렬되었습니다.'
+    });
+  };
 
   // 마우스 이동 추적 (노드 드래그 및 연결선 가이드)
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -335,127 +397,227 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* 1. 상단 컨트롤 툴바 */}
-      <div className="p-3.5 rounded-xl bg-[#161B22] border border-[#30363D] flex items-center justify-between gap-3 flex-wrap shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-indigo-400">
-            <Workflow className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-xs font-bold text-[#E6EDF3]">
-                2계층 작업그래프(DAG) 인터랙티브 워크플로우 디자이너 (Workflow Designer)
-              </h3>
-              <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-semibold border border-blue-500/30">
-                Drag & Drop
-              </span>
+      {/* 1. 상단 컨트롤 툴바 & 간격 조절 바 */}
+      <div className="space-y-2.5">
+        <div className="p-3.5 rounded-xl bg-[#161B22] border border-[#30363D] flex items-center justify-between gap-3 flex-wrap shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-indigo-400">
+              <Workflow className="w-5 h-5" />
             </div>
-            <p className="text-[11px] text-[#7D8590] mt-0.5">
-              노드를 드래그하여 자유롭게 배치하고, 노드 우측 핸들(●)을 클릭 후 대상 노드를 클릭하여 의존성을 실시간 연결·재구성합니다.
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs font-bold text-[#E6EDF3]">
+                  2계층 작업그래프(DAG) 인터랙티브 워크플로우 디자이너 (Workflow Designer)
+                </h3>
+                <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-semibold border border-blue-500/30">
+                  Drag & Drop
+                </span>
+              </div>
+              <p className="text-[11px] text-[#7D8590] mt-0.5">
+                노드를 드래그하여 자유롭게 배치하고, 노드 우측 핸들(●)을 클릭 후 대상 노드를 클릭하여 의존성을 실시간 연결·재구성합니다.
+              </p>
+            </div>
+          </div>
+
+          {/* 툴바 액션 버튼들 */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* 레이어 필터 */}
+            <div className="flex items-center bg-[#0D1117] p-0.5 rounded-lg border border-[#30363D]">
+              <button
+                id="btn-layer-all"
+                onClick={() => setActiveLayer('ALL')}
+                className={`px-2.5 py-1 rounded text-[11px] font-medium transition-all cursor-pointer ${
+                  activeLayer === 'ALL'
+                    ? 'bg-slate-700/60 text-[#E6EDF3] font-bold shadow-xs'
+                    : 'text-[#7D8590] hover:text-[#E6EDF3]'
+                }`}
+              >
+                전체 2계층 ({localTasks.length})
+              </button>
+              <button
+                id="btn-layer-platform"
+                onClick={() => setActiveLayer('PLATFORM')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-all cursor-pointer ${
+                  activeLayer === 'PLATFORM'
+                    ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 font-bold shadow-xs'
+                    : 'text-[#7D8590] hover:text-[#E6EDF3]'
+                }`}
+              >
+                <Cpu className="w-3 h-3 text-indigo-400" /> 플랫폼 활성 DAG
+              </button>
+              <button
+                id="btn-layer-onhold"
+                onClick={() => setActiveLayer('ON_HOLD')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-all cursor-pointer ${
+                  activeLayer === 'ON_HOLD'
+                    ? 'bg-amber-600/30 text-amber-300 border border-amber-500/40 font-bold shadow-xs'
+                    : 'text-[#7D8590] hover:text-[#E6EDF3]'
+                }`}
+              >
+                <Archive className="w-3 h-3 text-amber-400" /> 타겟 보류 목록
+              </button>
+            </div>
+
+            {/* 줌 컨트롤 */}
+            <div className="flex items-center bg-[#0D1117] p-0.5 rounded-lg border border-[#30363D]">
+              <button
+                id="btn-zoom-out"
+                onClick={() => setZoomLevel(prev => Math.max(0.6, prev - 0.1))}
+                className="p-1 rounded text-[#7D8590] hover:text-[#E6EDF3] hover:bg-[#21262D] cursor-pointer"
+                title="축소"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+              <span className="px-2 text-[10px] font-mono text-[#C9D1D9]">
+                {Math.round(zoomLevel * 100)}%
+              </span>
+              <button
+                id="btn-zoom-in"
+                onClick={() => setZoomLevel(prev => Math.min(1.4, prev + 0.1))}
+                className="p-1 rounded text-[#7D8590] hover:text-[#E6EDF3] hover:bg-[#21262D] cursor-pointer"
+                title="확대"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* 신규 노드 추가 */}
+            <button
+              id="btn-add-workflow-node"
+              onClick={handleAddNewNode}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#21262D] hover:bg-[#30363D] text-[#E6EDF3] border border-[#30363D] text-xs font-semibold transition-all cursor-pointer shadow-xs"
+            >
+              <Plus className="w-3.5 h-3.5 text-blue-400" />
+              노드 추가
+            </button>
+
+            {/* 리셋 */}
+            <button
+              id="btn-reset-workflow"
+              onClick={handleReset}
+              disabled={!hasUnsavedChanges}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all cursor-pointer ${
+                hasUnsavedChanges
+                  ? 'bg-[#21262D] border-[#30363D] text-[#C9D1D9] hover:bg-[#30363D]'
+                  : 'opacity-40 cursor-not-allowed border-transparent text-[#7D8590]'
+              }`}
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              되돌리기
+            </button>
+
+            {/* 저장 */}
+            <button
+              id="btn-save-workflow"
+              onClick={handleSaveChanges}
+              disabled={!hasUnsavedChanges}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-xs ${
+                hasUnsavedChanges
+                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400/50 ring-2 ring-emerald-500/30 animate-pulse'
+                  : 'bg-emerald-600/30 text-emerald-400/50 border border-emerald-500/20 cursor-not-allowed'
+              }`}
+            >
+              <Save className="w-3.5 h-3.5" />
+              변경사항 저장 {hasUnsavedChanges && '●'}
+            </button>
           </div>
         </div>
 
-        {/* 툴바 액션 버튼들 */}
-        <div className="flex items-center gap-2">
-          {/* 레이어 필터 */}
-          <div className="flex items-center bg-[#0D1117] p-0.5 rounded-lg border border-[#30363D]">
-            <button
-              id="btn-layer-all"
-              onClick={() => setActiveLayer('ALL')}
-              className={`px-2.5 py-1 rounded text-[11px] font-medium transition-all cursor-pointer ${
-                activeLayer === 'ALL'
-                  ? 'bg-slate-700/60 text-[#E6EDF3] font-bold shadow-xs'
-                  : 'text-[#7D8590] hover:text-[#E6EDF3]'
-              }`}
-            >
-              전체 2계층 ({localTasks.length})
-            </button>
-            <button
-              id="btn-layer-platform"
-              onClick={() => setActiveLayer('PLATFORM')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-all cursor-pointer ${
-                activeLayer === 'PLATFORM'
-                  ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 font-bold shadow-xs'
-                  : 'text-[#7D8590] hover:text-[#E6EDF3]'
-              }`}
-            >
-              <Cpu className="w-3 h-3 text-indigo-400" /> 플랫폼 활성 DAG
-            </button>
-            <button
-              id="btn-layer-onhold"
-              onClick={() => setActiveLayer('ON_HOLD')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-all cursor-pointer ${
-                activeLayer === 'ON_HOLD'
-                  ? 'bg-amber-600/30 text-amber-300 border border-amber-500/40 font-bold shadow-xs'
-                  : 'text-[#7D8590] hover:text-[#E6EDF3]'
-              }`}
-            >
-              <Archive className="w-3 h-3 text-amber-400" /> 타겟 보류 목록
-            </button>
+        {/* ⭐️ 2. 상하·좌우 간격 및 자동 정렬 제어 툴바 (Spacing & Auto-Layout Bar) */}
+        <div className="p-3 rounded-xl bg-[#0D1117] border border-[#30363D] flex items-center justify-between gap-4 flex-wrap text-xs">
+          <div className="flex items-center gap-4 flex-wrap">
+            {/* 프리셋 버튼 */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-semibold text-[#8B949E] flex items-center gap-1">
+                <Sliders className="w-3.5 h-3.5 text-indigo-400" /> 간격 프리셋:
+              </span>
+              <div className="flex items-center bg-[#161B22] p-0.5 rounded-lg border border-[#30363D]">
+                <button
+                  id="btn-preset-compact"
+                  onClick={() => handleApplyPreset('COMPACT')}
+                  className={`px-2.5 py-1 rounded text-[10px] font-medium transition-all cursor-pointer ${
+                    activePreset === 'COMPACT'
+                      ? 'bg-indigo-600/40 text-indigo-300 border border-indigo-500/40 font-bold'
+                      : 'text-[#7D8590] hover:text-[#E6EDF3]'
+                  }`}
+                >
+                  조밀 (270×105)
+                </button>
+                <button
+                  id="btn-preset-standard"
+                  onClick={() => handleApplyPreset('STANDARD')}
+                  className={`px-2.5 py-1 rounded text-[10px] font-medium transition-all cursor-pointer ${
+                    activePreset === 'STANDARD'
+                      ? 'bg-indigo-600/40 text-indigo-300 border border-indigo-500/40 font-bold'
+                      : 'text-[#7D8590] hover:text-[#E6EDF3]'
+                  }`}
+                >
+                  표준 (360×160)
+                </button>
+                <button
+                  id="btn-preset-spacious"
+                  onClick={() => handleApplyPreset('SPACIOUS')}
+                  className={`px-2.5 py-1 rounded text-[10px] font-medium transition-all cursor-pointer ${
+                    activePreset === 'SPACIOUS'
+                      ? 'bg-indigo-600/40 text-indigo-300 border border-indigo-500/40 font-bold'
+                      : 'text-[#7D8590] hover:text-[#E6EDF3]'
+                  }`}
+                >
+                  여유 (460×220)
+                </button>
+              </div>
+            </div>
+
+            {/* 수평 좌우 간격 슬라이더 */}
+            <div className="flex items-center gap-2 bg-[#161B22] px-3 py-1 rounded-lg border border-[#30363D]">
+              <span className="text-[11px] text-[#8B949E] flex items-center gap-1 font-mono">
+                ↔ 좌우 간격:
+              </span>
+              <input
+                id="slider-col-gap"
+                type="range"
+                min="240"
+                max="520"
+                step="10"
+                value={colGap}
+                onChange={(e) => handleColGapChange(Number(e.target.value))}
+                className="w-24 h-1.5 bg-[#30363D] rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              />
+              <span className="text-[11px] font-mono font-bold text-indigo-300 min-w-[40px]">
+                {colGap}px
+              </span>
+            </div>
+
+            {/* 수직 상하 간격 슬라이더 */}
+            <div className="flex items-center gap-2 bg-[#161B22] px-3 py-1 rounded-lg border border-[#30363D]">
+              <span className="text-[11px] text-[#8B949E] flex items-center gap-1 font-mono">
+                ↕ 상하 간격:
+              </span>
+              <input
+                id="slider-row-gap"
+                type="range"
+                min="90"
+                max="300"
+                step="10"
+                value={rowGap}
+                onChange={(e) => handleRowGapChange(Number(e.target.value))}
+                className="w-24 h-1.5 bg-[#30363D] rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              />
+              <span className="text-[11px] font-mono font-bold text-indigo-300 min-w-[40px]">
+                {rowGap}px
+              </span>
+            </div>
           </div>
 
-          {/* 줌 컨트롤 */}
-          <div className="flex items-center bg-[#0D1117] p-0.5 rounded-lg border border-[#30363D]">
-            <button
-              id="btn-zoom-out"
-              onClick={() => setZoomLevel(prev => Math.max(0.6, prev - 0.1))}
-              className="p-1 rounded text-[#7D8590] hover:text-[#E6EDF3] hover:bg-[#21262D] cursor-pointer"
-              title="축소"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <span className="px-2 text-[10px] font-mono text-[#C9D1D9]">
-              {Math.round(zoomLevel * 100)}%
-            </span>
-            <button
-              id="btn-zoom-in"
-              onClick={() => setZoomLevel(prev => Math.min(1.4, prev + 0.1))}
-              className="p-1 rounded text-[#7D8590] hover:text-[#E6EDF3] hover:bg-[#21262D] cursor-pointer"
-              title="확대"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* 신규 노드 추가 */}
+          {/* 자동 정렬 실행 버튼 */}
           <button
-            id="btn-add-workflow-node"
-            onClick={handleAddNewNode}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#21262D] hover:bg-[#30363D] text-[#E6EDF3] border border-[#30363D] text-xs font-semibold transition-all cursor-pointer shadow-xs"
+            id="btn-trigger-autolayout"
+            onClick={handleTriggerAutoLayout}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-semibold transition-all cursor-pointer shadow-xs"
+            title="위상 정렬 기반으로 모든 노드를 균등 간격으로 재배치합니다"
           >
-            <Plus className="w-3.5 h-3.5 text-blue-400" />
-            노드 추가
-          </button>
-
-          {/* 리셋 */}
-          <button
-            id="btn-reset-workflow"
-            onClick={handleReset}
-            disabled={!hasUnsavedChanges}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all cursor-pointer ${
-              hasUnsavedChanges
-                ? 'bg-[#21262D] border-[#30363D] text-[#C9D1D9] hover:bg-[#30363D]'
-                : 'opacity-40 cursor-not-allowed border-transparent text-[#7D8590]'
-            }`}
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            되돌리기
-          </button>
-
-          {/* 저장 */}
-          <button
-            id="btn-save-workflow"
-            onClick={handleSaveChanges}
-            disabled={!hasUnsavedChanges}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-xs ${
-              hasUnsavedChanges
-                ? 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400/50 ring-2 ring-emerald-500/30 animate-pulse'
-                : 'bg-emerald-600/30 text-emerald-400/50 border border-emerald-500/20 cursor-not-allowed'
-            }`}
-          >
-            <Save className="w-3.5 h-3.5" />
-            변경사항 저장 {hasUnsavedChanges && '●'}
+            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+            자동 정렬 (Auto-Layout)
           </button>
         </div>
       </div>
@@ -596,13 +758,27 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
                 if (!sourcePos) return null;
 
                 const isPlatform = targetTask.targetRepo !== 'pdfowers-service';
-                const startX = sourcePos.x + 240; // 노드 우측 중앙
+                // 카드 크기(width: 240px, height: ~105px) 기준 중심점 및 도킹 핀 좌표
+                const startX = sourcePos.x + 240; // 노드 우측 도킹 핀 (Source Pin)
                 const startY = sourcePos.y + 45;
-                const endX = targetPos.x; // 노드 좌측 중앙
+                const endX = targetPos.x;         // 노드 좌측 도킹 핀 (Target Pin)
                 const endY = targetPos.y + 45;
 
-                const deltaX = Math.max(50, Math.abs(endX - startX) / 2);
-                const pathD = `M ${startX} ${startY} C ${startX + deltaX} ${startY}, ${endX - deltaX} ${endY}, ${endX} ${endY}`;
+                // ⭐️ 다중 연결선 간 겹침 방지 및 꺾임 완화를 위한 지능형 큐빅 베지어 제어점(Control Points) 계산
+                const dx = endX - startX;
+                const dy = endY - startY;
+
+                let pathD = '';
+                if (dx > 0) {
+                  // 일반적인 정방향 연결 (Left -> Right)
+                  // 거리에 비례한 제어점 오프셋 적용으로 급격한 곡선 꺾임 방지
+                  const curveOffset = Math.max(40, Math.min(dx * 0.45, 180));
+                  pathD = `M ${startX} ${startY} C ${startX + curveOffset} ${startY}, ${endX - curveOffset} ${endY}, ${endX} ${endY}`;
+                } else {
+                  // 역방향 또는 동일 열 연결 시 루프형 베지어 라우팅 (노드 횡단 방지)
+                  const loopOffset = Math.max(60, Math.abs(dy) * 0.4);
+                  pathD = `M ${startX} ${startY} C ${startX + loopOffset} ${startY + (dy > 0 ? 30 : -30)}, ${endX - loopOffset} ${endY + (dy > 0 ? -30 : 30)}, ${endX} ${endY}`;
+                }
 
                 return (
                   <g key={`${sourceId}-${targetTask.id}`} className="group">
