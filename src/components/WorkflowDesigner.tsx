@@ -47,6 +47,42 @@ interface WorkflowDesignerProps {
 
 export type SpacingPreset = 'COMPACT' | 'STANDARD' | 'SPACIOUS';
 
+export const DAG_STORAGE_KEYS = {
+  COL_GAP: 'jkadh_dag_col_gap',
+  ROW_GAP: 'jkadh_dag_row_gap',
+  PRESET: 'jkadh_dag_preset',
+};
+
+export const getStoredColGap = (): number => {
+  try {
+    const val = Number(localStorage.getItem(DAG_STORAGE_KEYS.COL_GAP));
+    if (!isNaN(val) && val >= 240 && val <= 520) return val;
+  } catch (e) {
+    // fallback
+  }
+  return 360;
+};
+
+export const getStoredRowGap = (): number => {
+  try {
+    const val = Number(localStorage.getItem(DAG_STORAGE_KEYS.ROW_GAP));
+    if (!isNaN(val) && val >= 90 && val <= 300) return val;
+  } catch (e) {
+    // fallback
+  }
+  return 160;
+};
+
+export const getStoredPreset = (): SpacingPreset => {
+  try {
+    const val = localStorage.getItem(DAG_STORAGE_KEYS.PRESET) as SpacingPreset;
+    if (val === 'COMPACT' || val === 'STANDARD' || val === 'SPACIOUS') return val;
+  } catch (e) {
+    // fallback
+  }
+  return 'STANDARD';
+};
+
 export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
   tasks,
   onUpdateTasks,
@@ -63,10 +99,10 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [validationAlert, setValidationAlert] = useState<{ type: 'ERROR' | 'SUCCESS' | 'INFO'; message: string } | null>(null);
   
-  // ⭐️ 상하·좌우 간격 설정 상태 (Row Gap & Col Gap)
-  const [colGap, setColGap] = useState<number>(360); // 수평 간격 (220 ~ 520px, 기본 360px)
-  const [rowGap, setRowGap] = useState<number>(160); // 수직 간격 (80 ~ 300px, 기본 160px)
-  const [activePreset, setActivePreset] = useState<SpacingPreset>('STANDARD');
+  // ⭐️ 상하·좌우 간격 설정 상태 (Row Gap & Col Gap) - LocalStorage 기반 안전 영속화
+  const [colGap, setColGap] = useState<number>(getStoredColGap);
+  const [rowGap, setRowGap] = useState<number>(getStoredRowGap);
+  const [activePreset, setActivePreset] = useState<SpacingPreset>(getStoredPreset);
 
   // 캔버스 내 노드 위치 관리 (자동 레이아웃 + 드래그 위치)
   const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({});
@@ -156,6 +192,41 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
     setNodePositions(pos);
   }, [tasks.length]);
 
+  // ⭐️ 외부 동기화 이벤트 수신 (TaskGraphViewer 프리셋 변경 등)
+  useEffect(() => {
+    const handleSync = (e: Event) => {
+      const customEvt = e as CustomEvent<{ colGap?: number; rowGap?: number; preset?: SpacingPreset }>;
+      const nextCol = customEvt.detail?.colGap ?? getStoredColGap();
+      const nextRow = customEvt.detail?.rowGap ?? getStoredRowGap();
+      const nextPreset = customEvt.detail?.preset ?? getStoredPreset();
+      setColGap(nextCol);
+      setRowGap(nextRow);
+      setActivePreset(nextPreset);
+      setNodePositions(computeAutoLayout(localTasks, nextCol, nextRow));
+    };
+
+    window.addEventListener('jkadh_dag_spacing_updated', handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener('jkadh_dag_spacing_updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
+  }, [localTasks]);
+
+  // 안전 로컬 저장 및 동기화 헬퍼
+  const persistSpacing = (newCol: number, newRow: number, preset: SpacingPreset) => {
+    try {
+      localStorage.setItem(DAG_STORAGE_KEYS.COL_GAP, String(newCol));
+      localStorage.setItem(DAG_STORAGE_KEYS.ROW_GAP, String(newRow));
+      localStorage.setItem(DAG_STORAGE_KEYS.PRESET, preset);
+      window.dispatchEvent(new CustomEvent('jkadh_dag_spacing_updated', {
+        detail: { colGap: newCol, rowGap: newRow, preset }
+      }));
+    } catch (e) {
+      // ignore
+    }
+  };
+
   // 프리셋 선택 핸들러
   const handleApplyPreset = (preset: SpacingPreset) => {
     setActivePreset(preset);
@@ -170,6 +241,7 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
     }
     setColGap(newCol);
     setRowGap(newRow);
+    persistSpacing(newCol, newRow, preset);
     const pos = computeAutoLayout(localTasks, newCol, newRow);
     setNodePositions(pos);
     setValidationAlert({
@@ -182,6 +254,7 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
   const handleColGapChange = (val: number) => {
     setColGap(val);
     setActivePreset('STANDARD');
+    persistSpacing(val, rowGap, 'STANDARD');
     const pos = computeAutoLayout(localTasks, val, rowGap);
     setNodePositions(pos);
   };
@@ -189,6 +262,7 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
   const handleRowGapChange = (val: number) => {
     setRowGap(val);
     setActivePreset('STANDARD');
+    persistSpacing(colGap, val, 'STANDARD');
     const pos = computeAutoLayout(localTasks, colGap, val);
     setNodePositions(pos);
   };
