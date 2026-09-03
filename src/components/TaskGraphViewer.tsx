@@ -29,9 +29,15 @@ import {
   Layers,
   ExternalLink,
   Edit3,
+  Sliders,
 } from 'lucide-react';
 import { TaskGraphNode } from '../types';
-import { WorkflowDesigner } from './WorkflowDesigner';
+import {
+  WorkflowDesigner,
+  SpacingPreset,
+  getStoredPreset,
+  DAG_STORAGE_KEYS,
+} from './WorkflowDesigner';
 
 interface TaskGraphViewerProps {
   tasks: TaskGraphNode[];
@@ -48,6 +54,48 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<'BRANCH' | 'GRID' | 'DESIGNER'>('DESIGNER');
   const [activeTab, setActiveTab] = useState<'ALL' | 'PLATFORM' | 'ON_HOLD'>('ALL');
+  const [spacingPreset, setSpacingPreset] = useState<SpacingPreset>(getStoredPreset);
+
+  // 전역 간격 동기화 이벤트 수신
+  React.useEffect(() => {
+    const handleSync = (e: Event) => {
+      const customEvt = e as CustomEvent<{ preset?: SpacingPreset }>;
+      if (customEvt.detail?.preset) {
+        setSpacingPreset(customEvt.detail.preset);
+      } else {
+        setSpacingPreset(getStoredPreset());
+      }
+    };
+    window.addEventListener('jkadh_dag_spacing_updated', handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener('jkadh_dag_spacing_updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
+  }, []);
+
+  const handlePresetChange = (preset: SpacingPreset) => {
+    setSpacingPreset(preset);
+    let newCol = 360;
+    let newRow = 160;
+    if (preset === 'COMPACT') {
+      newCol = 270;
+      newRow = 105;
+    } else if (preset === 'SPACIOUS') {
+      newCol = 460;
+      newRow = 220;
+    }
+    try {
+      localStorage.setItem(DAG_STORAGE_KEYS.COL_GAP, String(newCol));
+      localStorage.setItem(DAG_STORAGE_KEYS.ROW_GAP, String(newRow));
+      localStorage.setItem(DAG_STORAGE_KEYS.PRESET, preset);
+      window.dispatchEvent(new CustomEvent('jkadh_dag_spacing_updated', {
+        detail: { colGap: newCol, rowGap: newRow, preset }
+      }));
+    } catch (e) {
+      // ignore
+    }
+  };
 
   const getModuleIcon = (module: TaskGraphNode['module']) => {
     switch (module) {
@@ -232,6 +280,46 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
               <LayoutGrid className="w-3 h-3" /> 전체 그리드
             </button>
           </div>
+
+          {/* DAG Spacing Preset Selector (전역 간격 동기화) */}
+          <div className="flex items-center bg-[#0D1117] p-0.5 rounded-lg border border-[#30363D]">
+            <span className="text-[10px] text-[#7D8590] px-1.5 font-medium flex items-center gap-1">
+              <Sliders className="w-3 h-3 text-indigo-400" /> 간격:
+            </span>
+            <button
+              onClick={() => handlePresetChange('COMPACT')}
+              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer ${
+                spacingPreset === 'COMPACT'
+                  ? 'bg-indigo-600/40 text-indigo-300 font-bold shadow-xs'
+                  : 'text-[#7D8590] hover:text-[#E6EDF3]'
+              }`}
+              title="조밀 간격 (수평 270px, 수직 105px)"
+            >
+              조밀
+            </button>
+            <button
+              onClick={() => handlePresetChange('STANDARD')}
+              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer ${
+                spacingPreset === 'STANDARD'
+                  ? 'bg-indigo-600/40 text-indigo-300 font-bold shadow-xs'
+                  : 'text-[#7D8590] hover:text-[#E6EDF3]'
+              }`}
+              title="표준 간격 (수평 360px, 수직 160px)"
+            >
+              표준
+            </button>
+            <button
+              onClick={() => handlePresetChange('SPACIOUS')}
+              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer ${
+                spacingPreset === 'SPACIOUS'
+                  ? 'bg-indigo-600/40 text-indigo-300 font-bold shadow-xs'
+                  : 'text-[#7D8590] hover:text-[#E6EDF3]'
+              }`}
+              title="여유 간격 (수평 460px, 수직 220px)"
+            >
+              여유
+            </button>
+          </div>
         </div>
       </div>
 
@@ -287,7 +375,7 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
             </div>
 
             {/* Pending Tasks List with Derivation Relationship */}
-            <div className="grid grid-cols-1 gap-2.5">
+            <div className={`grid grid-cols-1 ${spacingPreset === 'COMPACT' ? 'gap-1.5' : spacingPreset === 'SPACIOUS' ? 'gap-3.5' : 'gap-2.5'}`}>
               {pendingTasks.map((task) => {
                 const isSelected = task.id === selectedTaskId;
 
@@ -295,7 +383,9 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
                   <div
                     key={task.id}
                     onClick={() => onSelectTask(task.id)}
-                    className={`group relative p-3 rounded-lg border transition-all cursor-pointer ${
+                    className={`group relative rounded-lg border transition-all cursor-pointer ${
+                      spacingPreset === 'COMPACT' ? 'p-2' : spacingPreset === 'SPACIOUS' ? 'p-4' : 'p-3'
+                    } ${
                       isSelected
                         ? 'bg-[#1C2128] border-amber-500 shadow-md ring-1 ring-amber-500/40'
                         : 'bg-[#161B22]/90 border-[#30363D] hover:bg-[#21262D] hover:border-amber-500/40'
@@ -394,7 +484,7 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
             </div>
 
             {/* Timeline Branch Stack */}
-            <div className="relative pl-6 space-y-3 before:absolute before:left-3 before:top-2 before:bottom-2 before:w-0.5 before:bg-gradient-to-t before:from-emerald-500 before:via-blue-500 before:to-indigo-500">
+            <div className={`relative pl-6 ${spacingPreset === 'COMPACT' ? 'space-y-2' : spacingPreset === 'SPACIOUS' ? 'space-y-4' : 'space-y-3'} before:absolute before:left-3 before:top-2 before:bottom-2 before:w-0.5 before:bg-gradient-to-t before:from-emerald-500 before:via-blue-500 before:to-indigo-500`}>
               {historyTasks.map((task) => {
                 const isSelected = task.id === selectedTaskId;
                 const isRoot = task.dependencies.length === 0;
@@ -403,7 +493,9 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
                   <div
                     key={task.id}
                     onClick={() => onSelectTask(task.id)}
-                    className={`group relative p-3 rounded-lg border transition-all cursor-pointer ${
+                    className={`group relative rounded-lg border transition-all cursor-pointer ${
+                      spacingPreset === 'COMPACT' ? 'p-2' : spacingPreset === 'SPACIOUS' ? 'p-4' : 'p-3'
+                    } ${
                       isSelected
                         ? 'bg-[#1C2128] border-blue-500 shadow-md ring-1 ring-blue-500/40'
                         : 'bg-[#161B22] border-[#30363D] hover:bg-[#21262D] hover:border-[#484F58]'
@@ -499,7 +591,7 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
         </div>
       ) : (
         /* Classic Grid View */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ${spacingPreset === 'COMPACT' ? 'gap-1.5' : spacingPreset === 'SPACIOUS' ? 'gap-4' : 'gap-2.5'}`}>
           {tasks.map((task) => {
             const isSelected = task.id === selectedTaskId;
             const isPending = task.status === 'PLANNED' || task.status === 'ANALYSIS' || task.status === 'BACKLOG';
@@ -508,7 +600,9 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
               <div
                 key={task.id}
                 onClick={() => onSelectTask(task.id)}
-                className={`p-3.5 rounded-lg border transition-all cursor-pointer relative overflow-hidden ${
+                className={`rounded-lg border transition-all cursor-pointer relative overflow-hidden ${
+                  spacingPreset === 'COMPACT' ? 'p-2.5' : spacingPreset === 'SPACIOUS' ? 'p-4' : 'p-3.5'
+                } ${
                   isSelected
                     ? isPending
                       ? 'bg-[#1C2128] border-amber-500 shadow-sm ring-1 ring-amber-500/40'
