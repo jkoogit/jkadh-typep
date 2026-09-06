@@ -126,6 +126,25 @@ async function createIssue(title, body, labels = ['governance', 'task']) {
   }
 }
 
+// 1-1. Close Issue on GitHub
+async function closeIssue(issueNumber, comment = '') {
+  console.log(`[GitHub API] Closing Issue #${issueNumber}...`);
+  if (!issueNumber) return;
+  if (comment) {
+    await githubRequest('POST', `/issues/${issueNumber}/comments`, { body: comment });
+  }
+  const res = await githubRequest('PATCH', `/issues/${issueNumber}`, {
+    state: 'closed'
+  });
+  if (res.status === 200) {
+    console.log(`[GitHub API] ✅ Issue #${issueNumber} successfully closed!`);
+    return res.data;
+  } else {
+    console.warn(`[GitHub API] ⚠️ Issue close response (${res.status}):`, res.data?.message || res.raw);
+    return res.data;
+  }
+}
+
 // 2. Create Pull Request on GitHub
 async function createPullRequest(title, head, base = 'dev', body = '') {
   console.log(`[GitHub API] Creating PR: "${title}" (${head} -> ${base})...`);
@@ -240,6 +259,11 @@ async function main() {
       await createIssue(title, body, labels ? labels.split(',') : undefined);
       break;
     }
+    case 'close-issue': {
+      const [issueNumber, comment] = args;
+      await closeIssue(Number(issueNumber), comment);
+      break;
+    }
     case 'create-pr': {
       const [title, head, base, body] = args;
       await createPullRequest(title, head, base || 'dev', body);
@@ -284,6 +308,7 @@ if (require.main === module) {
 
 module.exports = {
   createIssue,
+  closeIssue,
   createPullRequest,
   mergePullRequest,
   createReleaseTag,
