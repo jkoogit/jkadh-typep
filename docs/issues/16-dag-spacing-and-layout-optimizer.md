@@ -1,9 +1,11 @@
 # [이슈 #30] 작업그래프(DAG) 카드 상하·좌우 여백 조절 및 화살표 엉킴 방지 레이아웃 최적화
 
 - **이슈 번호**: #30
+- **상태**: `CLOSED` (PR #31 머지 및 v2.9.0 릴리즈 완료)
 - **작업 브랜치**: `task/dag-spacing-and-layout-optimizer`
 - **담당자**: @jkoogit (AI Assistant)
 - **작성일자**: 2026-08-31
+- **종료일자**: 2026-09-06
 - **원격 이슈 URL**: https://github.com/jkoogit/jkadh-typep/issues/30
 
 ---
