@@ -1,9 +1,11 @@
 # [이슈 #34] DAG 간격 설정 로컬 영속화(LocalStorage) 및 TaskGraphViewer 여백 동기화
 
 - **이슈 번호**: #34
+- **상태**: `CLOSED` (PR #35 머지 및 v2.10.0 릴리즈 완료)
 - **작업 브랜치**: `task/dag-spacing-persistence-and-viewer-sync`
 - **담당자**: @jkoogit (AI Assistant)
 - **작성일자**: 2026-09-01
+- **종료일자**: 2026-09-06
 - **원격 이슈 URL**: https://github.com/jkoogit/jkadh-typep/issues/34
 
 ---
