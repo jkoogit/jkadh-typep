@@ -30,6 +30,7 @@ import {
   ExternalLink,
   Edit3,
   Sliders,
+  X,
 } from 'lucide-react';
 import { TaskGraphNode } from '../types';
 import {
@@ -38,6 +39,10 @@ import {
   getStoredPreset,
   DAG_STORAGE_KEYS,
 } from './WorkflowDesigner';
+import {
+  computeDagLineage,
+  getNodeHighlightRole,
+} from '../services/dagLineageEngine';
 
 interface TaskGraphViewerProps {
   tasks: TaskGraphNode[];
@@ -55,6 +60,11 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
   const [viewMode, setViewMode] = useState<'BRANCH' | 'GRID' | 'DESIGNER'>('DESIGNER');
   const [activeTab, setActiveTab] = useState<'ALL' | 'PLATFORM' | 'ON_HOLD'>('ALL');
   const [spacingPreset, setSpacingPreset] = useState<SpacingPreset>(getStoredPreset);
+
+  // ⭐️ 선택 노드 기준 연관 계통(선행 조상/후속 자손) 재귀 탐색
+  const lineage = React.useMemo(() => {
+    return computeDagLineage(selectedTaskId, tasks);
+  }, [selectedTaskId, tasks]);
 
   // 전역 간격 동기화 이벤트 수신
   React.useEffect(() => {
@@ -336,6 +346,45 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
         </div>
       )}
 
+      {/* ⭐️ 선택 노드 연관 계통 하이라이트 상태 바 (BRANCH / GRID 뷰 공통) */}
+      {viewMode !== 'DESIGNER' && lineage.isHighlightActive && (
+        <div className="bg-[#161B22]/95 border border-indigo-500/40 rounded-xl p-2.5 px-4 text-xs shadow-xl flex items-center justify-between gap-3 animate-in fade-in duration-150">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
+            </span>
+            <span className="text-blue-300 font-bold font-mono">
+              {tasks.find(t => t.id === lineage.selectedId)?.code || lineage.selectedId}
+            </span>
+            <span className="text-slate-300 font-medium truncate hidden md:inline">
+              {tasks.find(t => t.id === lineage.selectedId)?.title}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-[11px] shrink-0">
+            <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              선행: {lineage.upstreamCount}건
+            </span>
+            <span className="px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/40 font-semibold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+              후속: {lineage.downstreamCount}건
+            </span>
+            <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700">
+              딤: {lineage.unrelatedCount}건
+            </span>
+            <button
+              onClick={() => onSelectTask('')}
+              className="ml-2 px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium border border-slate-600/60 transition-colors cursor-pointer flex items-center gap-1"
+              title="선택 해제 및 전체 노드 100% 가시성 복원"
+            >
+              <X className="w-3 h-3" />
+              선택 해제
+            </button>
+          </div>
+        </div>
+      )}
+
       {viewMode === 'DESIGNER' ? (
         <WorkflowDesigner
           tasks={tasks}
@@ -378,6 +427,19 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
             <div className={`grid grid-cols-1 ${spacingPreset === 'COMPACT' ? 'gap-1.5' : spacingPreset === 'SPACIOUS' ? 'gap-3.5' : 'gap-2.5'}`}>
               {pendingTasks.map((task) => {
                 const isSelected = task.id === selectedTaskId;
+                const role = getNodeHighlightRole(task.id, lineage);
+
+                let cardHighlight = '';
+                if (lineage.isHighlightActive) {
+                  if (role === 'SELF') cardHighlight = 'bg-[#1C2128] border-blue-500 shadow-xl ring-2 ring-blue-500 scale-[1.01] opacity-100 z-10';
+                  else if (role === 'UPSTREAM') cardHighlight = 'bg-[#0d1d17] border-emerald-400 shadow-lg ring-2 ring-emerald-400 opacity-100 z-10';
+                  else if (role === 'DOWNSTREAM') cardHighlight = 'bg-[#171226] border-purple-400 shadow-lg ring-2 ring-purple-400 opacity-100 z-10';
+                  else cardHighlight = 'opacity-25 hover:opacity-80 transition-opacity bg-[#161B22]/70 border-[#30363D]/50';
+                } else {
+                  cardHighlight = isSelected
+                    ? 'bg-[#1C2128] border-amber-500 shadow-md ring-1 ring-amber-500/40'
+                    : 'bg-[#161B22]/90 border-[#30363D] hover:bg-[#21262D] hover:border-amber-500/40';
+                }
 
                 return (
                   <div
@@ -385,11 +447,7 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
                     onClick={() => onSelectTask(task.id)}
                     className={`group relative rounded-lg border transition-all cursor-pointer ${
                       spacingPreset === 'COMPACT' ? 'p-2' : spacingPreset === 'SPACIOUS' ? 'p-4' : 'p-3'
-                    } ${
-                      isSelected
-                        ? 'bg-[#1C2128] border-amber-500 shadow-md ring-1 ring-amber-500/40'
-                        : 'bg-[#161B22]/90 border-[#30363D] hover:bg-[#21262D] hover:border-amber-500/40'
-                    }`}
+                    } ${cardHighlight}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
@@ -399,6 +457,21 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
                             {getModuleIcon(task.module)}
                             {task.code}
                           </span>
+                          {role === 'SELF' && (
+                            <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                              Self
+                            </span>
+                          )}
+                          {role === 'UPSTREAM' && (
+                            <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse">
+                              선행
+                            </span>
+                          )}
+                          {role === 'DOWNSTREAM' && (
+                            <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 animate-pulse">
+                              후속
+                            </span>
+                          )}
 
                           {/* Derivation Source Relationship */}
                           {task.derivedFromTaskCode && (
@@ -488,6 +561,35 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
               {historyTasks.map((task) => {
                 const isSelected = task.id === selectedTaskId;
                 const isRoot = task.dependencies.length === 0;
+                const role = getNodeHighlightRole(task.id, lineage);
+
+                let cardHighlight = '';
+                if (lineage.isHighlightActive) {
+                  if (role === 'SELF') cardHighlight = 'bg-[#1C2128] border-blue-500 shadow-xl ring-2 ring-blue-500 scale-[1.01] opacity-100 z-10';
+                  else if (role === 'UPSTREAM') cardHighlight = 'bg-[#0d1d17] border-emerald-400 shadow-lg ring-2 ring-emerald-400 opacity-100 z-10';
+                  else if (role === 'DOWNSTREAM') cardHighlight = 'bg-[#171226] border-purple-400 shadow-lg ring-2 ring-purple-400 opacity-100 z-10';
+                  else cardHighlight = 'opacity-25 hover:opacity-80 transition-opacity bg-[#161B22]/70 border-[#30363D]/50';
+                } else {
+                  cardHighlight = isSelected
+                    ? 'bg-[#1C2128] border-blue-500 shadow-md ring-1 ring-blue-500/40'
+                    : 'bg-[#161B22] border-[#30363D] hover:bg-[#21262D] hover:border-[#484F58]';
+                }
+
+                let bulletClass = 'bg-cyan-400 border-[#0D1117]';
+                if (lineage.isHighlightActive) {
+                  if (role === 'SELF') bulletClass = 'bg-blue-500 border-[#0D1117] ring-2 ring-blue-400 shadow-md scale-125';
+                  else if (role === 'UPSTREAM') bulletClass = 'bg-emerald-400 border-[#0D1117] ring-2 ring-emerald-300 shadow-md scale-110';
+                  else if (role === 'DOWNSTREAM') bulletClass = 'bg-purple-400 border-[#0D1117] ring-2 ring-purple-300 shadow-md scale-110';
+                  else bulletClass = 'bg-slate-700 border-[#0D1117] opacity-30';
+                } else {
+                  bulletClass = isSelected
+                    ? 'bg-blue-500 border-[#0D1117] ring-2 ring-blue-400 shadow-sm'
+                    : task.status === 'DONE'
+                    ? 'bg-emerald-500 border-[#0D1117]'
+                    : task.status === 'DEVELOPING'
+                    ? 'bg-indigo-400 border-[#0D1117] animate-pulse'
+                    : 'bg-cyan-400 border-[#0D1117]';
+                }
 
                 return (
                   <div
@@ -495,23 +597,11 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
                     onClick={() => onSelectTask(task.id)}
                     className={`group relative rounded-lg border transition-all cursor-pointer ${
                       spacingPreset === 'COMPACT' ? 'p-2' : spacingPreset === 'SPACIOUS' ? 'p-4' : 'p-3'
-                    } ${
-                      isSelected
-                        ? 'bg-[#1C2128] border-blue-500 shadow-md ring-1 ring-blue-500/40'
-                        : 'bg-[#161B22] border-[#30363D] hover:bg-[#21262D] hover:border-[#484F58]'
-                    }`}
+                    } ${cardHighlight}`}
                   >
                     {/* Branch Node Bullet Indicator on timeline */}
                     <div
-                      className={`absolute -left-[1.85rem] top-4 w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center transition-all ${
-                        isSelected
-                          ? 'bg-blue-500 border-[#0D1117] ring-2 ring-blue-400 shadow-sm'
-                          : task.status === 'DONE'
-                          ? 'bg-emerald-500 border-[#0D1117]'
-                          : task.status === 'DEVELOPING'
-                          ? 'bg-indigo-400 border-[#0D1117] animate-pulse'
-                          : 'bg-cyan-400 border-[#0D1117]'
-                      }`}
+                      className={`absolute -left-[1.85rem] top-4 w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center transition-all ${bulletClass}`}
                     >
                       <div className="w-1 h-1 rounded-full bg-[#0D1117]" />
                     </div>
@@ -524,6 +614,21 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
                             {getModuleIcon(task.module)}
                             {task.code}
                           </span>
+                          {role === 'SELF' && (
+                            <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                              Self
+                            </span>
+                          )}
+                          {role === 'UPSTREAM' && (
+                            <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse">
+                              선행
+                            </span>
+                          )}
+                          {role === 'DOWNSTREAM' && (
+                            <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 animate-pulse">
+                              후속
+                            </span>
+                          )}
                           <span className="font-mono text-[11px] text-[#7D8590] flex items-center gap-1">
                             <GitBranch className="w-3 h-3 text-[#58A6FF]" />
                             {task.gitBranch || `feature/${task.code.toLowerCase()}`}
@@ -595,6 +700,21 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
           {tasks.map((task) => {
             const isSelected = task.id === selectedTaskId;
             const isPending = task.status === 'PLANNED' || task.status === 'ANALYSIS' || task.status === 'BACKLOG';
+            const role = getNodeHighlightRole(task.id, lineage);
+
+            let cardHighlight = '';
+            if (lineage.isHighlightActive) {
+              if (role === 'SELF') cardHighlight = 'bg-[#1C2128] border-blue-500 shadow-xl ring-2 ring-blue-500 scale-[1.01] opacity-100 z-10';
+              else if (role === 'UPSTREAM') cardHighlight = 'bg-[#0d1d17] border-emerald-400 shadow-lg ring-2 ring-emerald-400 opacity-100 z-10';
+              else if (role === 'DOWNSTREAM') cardHighlight = 'bg-[#171226] border-purple-400 shadow-lg ring-2 ring-purple-400 opacity-100 z-10';
+              else cardHighlight = 'opacity-25 hover:opacity-80 transition-opacity bg-[#161B22]/70 border-[#30363D]/50';
+            } else {
+              cardHighlight = isSelected
+                ? isPending
+                  ? 'bg-[#1C2128] border-amber-500 shadow-sm ring-1 ring-amber-500/40'
+                  : 'bg-[#21262D] border-blue-500 shadow-sm ring-1 ring-blue-500/40'
+                : 'bg-[#161B22] border-[#30363D] hover:bg-[#21262D]/60 hover:border-[#484F58]';
+            }
 
             return (
               <div
@@ -602,13 +722,7 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
                 onClick={() => onSelectTask(task.id)}
                 className={`rounded-lg border transition-all cursor-pointer relative overflow-hidden ${
                   spacingPreset === 'COMPACT' ? 'p-2.5' : spacingPreset === 'SPACIOUS' ? 'p-4' : 'p-3.5'
-                } ${
-                  isSelected
-                    ? isPending
-                      ? 'bg-[#1C2128] border-amber-500 shadow-sm ring-1 ring-amber-500/40'
-                      : 'bg-[#21262D] border-blue-500 shadow-sm ring-1 ring-blue-500/40'
-                    : 'bg-[#161B22] border-[#30363D] hover:bg-[#21262D]/60 hover:border-[#484F58]'
-                }`}
+                } ${cardHighlight}`}
               >
                 {/* Top Row: Code & Status */}
                 <div className="flex items-center justify-between mb-1.5">
@@ -617,6 +731,21 @@ export const TaskGraphViewer: React.FC<TaskGraphViewerProps> = ({
                       {getModuleIcon(task.module)}
                     </div>
                     <span className="font-mono text-xs font-bold text-blue-300">{task.code}</span>
+                    {role === 'SELF' && (
+                      <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                        Self
+                      </span>
+                    )}
+                    {role === 'UPSTREAM' && (
+                      <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse">
+                        선행
+                      </span>
+                    )}
+                    {role === 'DOWNSTREAM' && (
+                      <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 animate-pulse">
+                        후속
+                      </span>
+                    )}
                   </div>
                   {getStatusBadge(task.status)}
                 </div>

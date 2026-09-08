@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   GitBranch,
   Workflow,
@@ -34,9 +34,15 @@ import {
   Filter,
   Sliders,
   Grid,
-  Maximize
+  Maximize,
+  X,
 } from 'lucide-react';
 import { TaskGraphNode } from '../types';
+import {
+  computeDagLineage,
+  getNodeHighlightRole,
+  getEdgeHighlightRole,
+} from '../services/dagLineageEngine';
 
 interface WorkflowDesignerProps {
   tasks: TaskGraphNode[];
@@ -107,6 +113,11 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
   // 캔버스 내 노드 위치 관리 (자동 레이아웃 + 드래그 위치)
   const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({});
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  // ⭐️ 선택 노드 기준 연관 계통(선행 조상/후속 자손) 재귀 탐색 상태
+  const lineage = useMemo(() => {
+    return computeDagLineage(selectedTaskId, localTasks);
+  }, [selectedTaskId, localTasks]);
 
   // ⭐️ 계층형 위상 정렬 기반 자동 레이아웃 계산 함수 (Sugiyama Leveling with Spacing)
   const computeAutoLayout = (
@@ -765,6 +776,48 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
           </div>
         )}
 
+        {/* ⭐️ 선택 노드 연관 계통(선행 조상 & 후속 자손) 동적 하이라이트 & 딤 안내 바 */}
+        {lineage.isHighlightActive && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 bg-[#161B22]/95 border border-indigo-500/40 backdrop-blur-md rounded-xl px-4 py-2 text-xs shadow-2xl flex items-center gap-3 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
+              </span>
+              <span className="text-blue-300 font-bold font-mono">
+                {localTasks.find(t => t.id === lineage.selectedId)?.code || lineage.selectedId}
+              </span>
+              <span className="text-slate-300 font-medium truncate max-w-[180px] hidden sm:inline">
+                {localTasks.find(t => t.id === lineage.selectedId)?.title}
+              </span>
+            </div>
+            <div className="h-3.5 w-px bg-slate-700" />
+            <div className="flex items-center gap-2 text-[11px]">
+              <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                선행 조상: {lineage.upstreamCount}건
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/40 font-semibold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                후속 자손: {lineage.downstreamCount}건
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700 font-medium">
+                비연관 딤: {lineage.unrelatedCount}건
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                if (onSelectTask) onSelectTask('');
+              }}
+              className="ml-1 px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium border border-slate-600/60 transition-colors cursor-pointer flex items-center gap-1"
+              title="선택 해제 및 전체 노드 100% 가시성 복원"
+            >
+              <X className="w-3 h-3" />
+              선택 해제
+            </button>
+          </div>
+        )}
+
         {/* 드래그 및 줌이 적용되는 캔버스 */}
         <div
           ref={canvasRef}
@@ -774,6 +827,7 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
           onClick={(e) => {
             if (e.target === canvasRef.current || (e.target as HTMLElement).tagName === 'svg') {
               setConnectingSourceId(null);
+              if (onSelectTask) onSelectTask('');
             }
           }}
           className="w-full h-[760px] overflow-auto relative cursor-crosshair bg-grid-pattern"
@@ -819,6 +873,37 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
               >
                 <polygon points="0 0, 8 3, 0 6" fill="#38BDF8" />
               </marker>
+              {/* 계통 하이라이트 전용 마커 화살표 */}
+              <marker
+                id="arrowhead-upstream"
+                markerWidth="8"
+                markerHeight="6"
+                refX="7"
+                refY="3"
+                orient="auto"
+              >
+                <polygon points="0 0, 8 3, 0 6" fill="#34D399" />
+              </marker>
+              <marker
+                id="arrowhead-downstream"
+                markerWidth="8"
+                markerHeight="6"
+                refX="7"
+                refY="3"
+                orient="auto"
+              >
+                <polygon points="0 0, 8 3, 0 6" fill="#C084FC" />
+              </marker>
+              <marker
+                id="arrowhead-dimmed"
+                markerWidth="8"
+                markerHeight="6"
+                refX="7"
+                refY="3"
+                orient="auto"
+              >
+                <polygon points="0 0, 8 3, 0 6" fill="#475569" />
+              </marker>
             </defs>
 
             {/* 기존 노드 간 의존성 곡선 렌더링 */}
@@ -854,6 +939,35 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
                   pathD = `M ${startX} ${startY} C ${startX + loopOffset} ${startY + (dy > 0 ? 30 : -30)}, ${endX - loopOffset} ${endY + (dy > 0 ? -30 : 30)}, ${endX} ${endY}`;
                 }
 
+                // ⭐️ 연관 계통 기반 연결선(Edge) 스타일 분기
+                const edgeRole = getEdgeHighlightRole(sourceId, targetTask.id, lineage);
+
+                let strokeColor = isPlatform ? '#6366F1' : '#F59E0B';
+                let strokeWidth = '2.2';
+                let strokeDash = isPlatform ? 'none' : '4 3';
+                let markerEnd = `url(#${isPlatform ? 'arrowhead-active' : 'arrowhead-onhold'})`;
+                let edgeOpacity = 0.8;
+
+                if (edgeRole === 'UPSTREAM') {
+                  strokeColor = '#34D399';
+                  strokeWidth = '2.8';
+                  strokeDash = 'none';
+                  markerEnd = 'url(#arrowhead-upstream)';
+                  edgeOpacity = 1;
+                } else if (edgeRole === 'DOWNSTREAM') {
+                  strokeColor = '#C084FC';
+                  strokeWidth = '2.8';
+                  strokeDash = 'none';
+                  markerEnd = 'url(#arrowhead-downstream)';
+                  edgeOpacity = 1;
+                } else if (edgeRole === 'UNRELATED') {
+                  strokeColor = '#334155';
+                  strokeWidth = '1.2';
+                  strokeDash = '3 3';
+                  markerEnd = 'url(#arrowhead-dimmed)';
+                  edgeOpacity = 0.15;
+                }
+
                 return (
                   <g key={`${sourceId}-${targetTask.id}`} className="group">
                     {/* 호버 영역 */}
@@ -869,11 +983,12 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
                     <path
                       d={pathD}
                       fill="none"
-                      stroke={isPlatform ? '#6366F1' : '#F59E0B'}
-                      strokeWidth="2.2"
-                      strokeDasharray={isPlatform ? 'none' : '4 3'}
-                      markerEnd={`url(#${isPlatform ? 'arrowhead-active' : 'arrowhead-onhold'})`}
-                      className="transition-all opacity-80 group-hover:opacity-100 group-hover:stroke-cyan-400 group-hover:stroke-[3]"
+                      stroke={strokeColor}
+                      strokeWidth={strokeWidth}
+                      strokeDasharray={strokeDash}
+                      markerEnd={markerEnd}
+                      style={{ opacity: edgeOpacity }}
+                      className="transition-all group-hover:opacity-100 group-hover:stroke-cyan-400 group-hover:stroke-[3]"
                     />
                   </g>
                 );
@@ -901,6 +1016,31 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
             const isConnecting = connectingSourceId === task.id;
             const isPlatform = task.targetRepo !== 'pdfowers-service' && task.status !== 'ON_HOLD';
 
+            // ⭐️ 연관 계통 기반 노드 하이라이트/딤 역할 산정
+            const highlightRole = getNodeHighlightRole(task.id, lineage);
+
+            let roleCardClass = '';
+            if (lineage.isHighlightActive) {
+              if (highlightRole === 'SELF') {
+                roleCardClass = 'ring-2 ring-blue-500 shadow-2xl bg-[#1C2128] border-blue-400 scale-[1.02] z-30 opacity-100';
+              } else if (highlightRole === 'UPSTREAM') {
+                roleCardClass = 'ring-2 ring-emerald-400 shadow-xl bg-[#0d1d17] border-emerald-400/90 z-25 opacity-100';
+              } else if (highlightRole === 'DOWNSTREAM') {
+                roleCardClass = 'ring-2 ring-purple-400 shadow-xl bg-[#171226] border-purple-400/90 z-25 opacity-100';
+              } else {
+                // UNRELATED
+                roleCardClass = 'opacity-20 hover:opacity-75 transition-all duration-200 z-10 bg-[#161B22]/70 border-[#30363D]/40 grayscale-30';
+              }
+            } else {
+              if (isConnecting) {
+                roleCardClass = 'ring-2 ring-cyan-400 shadow-xl bg-[#161B22] border-cyan-400 z-20';
+              } else if (isPlatform) {
+                roleCardClass = 'bg-[#161B22] border-[#30363D] hover:border-indigo-400 hover:shadow-md z-20';
+              } else {
+                roleCardClass = 'bg-[#13161C] border-amber-500/30 hover:border-amber-400 hover:shadow-md z-20';
+              }
+            }
+
             return (
               <div
                 key={task.id}
@@ -909,15 +1049,7 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
                   transform: `translate(${pos.x}px, ${pos.y}px)`,
                   width: '240px'
                 }}
-                className={`absolute z-20 rounded-xl border transition-shadow cursor-grab active:cursor-grabbing select-none ${
-                  isSelected
-                    ? 'ring-2 ring-blue-500 shadow-xl bg-[#1C2128] border-blue-400'
-                    : isConnecting
-                    ? 'ring-2 ring-cyan-400 shadow-xl bg-[#161B22] border-cyan-400'
-                    : isPlatform
-                    ? 'bg-[#161B22] border-[#30363D] hover:border-indigo-400 hover:shadow-md'
-                    : 'bg-[#13161C] border-amber-500/30 hover:border-amber-400 hover:shadow-md'
-                }`}
+                className={`absolute rounded-xl border transition-all cursor-grab active:cursor-grabbing select-none ${roleCardClass}`}
                 onMouseDown={(e) => {
                   // 버튼 클릭이 아닌 카드 영역 클릭 시 드래그 시작
                   if ((e.target as HTMLElement).closest('button')) return;
@@ -939,6 +1071,21 @@ export const WorkflowDesigner: React.FC<WorkflowDesignerProps> = ({
                     <span className="font-mono text-xs font-bold text-blue-300 truncate">
                       {task.code}
                     </span>
+                    {highlightRole === 'SELF' && (
+                      <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-blue-500/20 text-blue-300 border border-blue-500/40 shrink-0">
+                        Self
+                      </span>
+                    )}
+                    {highlightRole === 'UPSTREAM' && (
+                      <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0 animate-pulse">
+                        선행
+                      </span>
+                    )}
+                    {highlightRole === 'DOWNSTREAM' && (
+                      <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 shrink-0 animate-pulse">
+                        후속
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     {getStatusBadge(task.status)}
