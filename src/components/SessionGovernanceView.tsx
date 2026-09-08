@@ -29,6 +29,30 @@ interface SessionGovernanceViewProps {
   selectedTaskId: string;
 }
 
+export const formatSessionCostUsd = (val: unknown, fallback = 1.4285): string => {
+  if (val === null || val === undefined || val === '') {
+    return Number(fallback).toFixed(4);
+  }
+  const num = typeof val === 'number' ? val : Number(val);
+  return isNaN(num) ? Number(fallback).toFixed(4) : num.toFixed(4);
+};
+
+export const formatSessionTokens = (val: unknown, fallback = 342850): string => {
+  if (val === null || val === undefined || val === '') {
+    return (Number(fallback) / 1000).toFixed(1);
+  }
+  const num = typeof val === 'number' ? val : Number(val);
+  return isNaN(num) ? (Number(fallback) / 1000).toFixed(1) : (num / 1000).toFixed(1);
+};
+
+export const formatSessionExecCount = (val: unknown, fallback = 14): number => {
+  if (val === null || val === undefined || val === '') {
+    return Number(fallback);
+  }
+  const num = typeof val === 'number' ? val : Number(val);
+  return isNaN(num) ? Number(fallback) : Math.round(num);
+};
+
 export const SessionGovernanceView: React.FC<SessionGovernanceViewProps> = ({
   tasks,
   onSelectTask,
@@ -194,7 +218,7 @@ export const SessionGovernanceView: React.FC<SessionGovernanceViewProps> = ({
             세션 누적 토큰
           </span>
           <div className="text-lg font-bold font-mono text-[#E6EDF3]">
-            {((session?.tokens_consumed || 342850) / 1000).toFixed(1)}k
+            {formatSessionTokens(session?.tokens_consumed)}k
           </div>
           <span className="text-[10px] text-emerald-400 font-mono">한도 대비 6.8% 소비</span>
         </div>
@@ -205,7 +229,7 @@ export const SessionGovernanceView: React.FC<SessionGovernanceViewProps> = ({
             개발 비용 집계
           </span>
           <div className="text-lg font-bold font-mono text-emerald-400">
-            ${(session?.cost_usd || 1.4285).toFixed(4)}
+            ${formatSessionCostUsd(session?.cost_usd)}
           </div>
           <span className="text-[10px] text-[#7D8590] font-mono">예산 정상 범위</span>
         </div>
@@ -216,7 +240,7 @@ export const SessionGovernanceView: React.FC<SessionGovernanceViewProps> = ({
             하네스 실행 횟수
           </span>
           <div className="text-lg font-bold font-mono text-purple-300">
-            {session?.execution_count || 14}회
+            {formatSessionExecCount(session?.execution_count)}회
           </div>
           <span className="text-[10px] text-purple-400 font-mono">AST 통과율 100%</span>
         </div>

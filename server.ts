@@ -376,7 +376,14 @@ async function startServer() {
           sql: `SELECT * FROM harness_sessions ORDER BY started_at DESC LIMIT 1;`,
         });
         if (queryRes.data?.rows?.length > 0) {
-          activeSessionState = { ...activeSessionState, ...queryRes.data.rows[0] };
+          const row = queryRes.data.rows[0];
+          activeSessionState = {
+            ...activeSessionState,
+            ...row,
+            tokens_consumed: row.tokens_consumed !== undefined && row.tokens_consumed !== null ? Number(row.tokens_consumed) : activeSessionState.tokens_consumed,
+            cost_usd: row.cost_usd !== undefined && row.cost_usd !== null ? Number(row.cost_usd) : activeSessionState.cost_usd,
+            execution_count: row.execution_count !== undefined && row.execution_count !== null ? Number(row.execution_count) : activeSessionState.execution_count,
+          };
         }
       } catch (err: any) {
         console.warn('PostgreSQL session query failed, using in-memory state:', err.message);
